@@ -10,6 +10,8 @@ Complete reference for all SkillOpt configuration parameters.
 | `model.optimizer` | str | `gpt-5.5` | Optimizer model (for reflection & slow update) |
 | `model.target` | str | `gpt-5.5` | Target model (for rollout execution) |
 | `model.reasoning_effort` | str | `medium` | Reasoning effort level |
+| `model.optimizer_openai_base_url` | str | `""` | Generic OpenAI-compatible optimizer endpoint (e.g. DeepSeek `https://api.deepseek.com/v1`). Set with `optimizer_backend: openai_chat`; empty = Azure optimizer |
+| `model.optimizer_openai_api_key` | str | `""` | API key for the generic optimizer endpoint. Prefer the `OPTIMIZER_OPENAI_API_KEY` env var; never commit |
 
 ## Training (`train`)
 

@@ -22,6 +22,8 @@ configs/**/*.local.yaml
 *.bak
 
 .env
+.env.*
+!.env.*.example
 .secrets/
 .codex_azure*/
 
@@ -40,3 +42,6 @@ docs/reflact_overview.html
 docs/render_ablation_paper_tables.py
 docs/让*
 .gradio/
+.claude/
+.repomixignore
+release-manifest.json

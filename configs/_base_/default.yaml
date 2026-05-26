@@ -43,6 +43,8 @@ model:
   target_azure_openai_auth_mode: azure_cli
   target_azure_openai_ad_scope: "https://cognitiveservices.azure.com/.default"
   target_azure_openai_managed_identity_client_id: ""
+  optimizer_openai_base_url: ""        # e.g. "https://api.deepseek.com/v1" - generic OpenAI-compatible optimizer (DeepSeek). Empty = Azure optimizer.
+  optimizer_openai_api_key: ""         # fill locally or export OPTIMIZER_OPENAI_API_KEY; never commit
 
 train:
   num_epochs: 4

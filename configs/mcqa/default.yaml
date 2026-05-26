@@ -1,0 +1,12 @@
+_base_: ../_base_/default.yaml
+
+env:
+  name: mcqa
+  skill_init: skillopt/envs/mcqa/skills/initial.md
+  split_mode: split_dir
+  split_dir: data/mcqa_csqa_split
+  data_path: ""
+  split_output_dir: ""
+  max_turns: 1
+  workers: 4
+  limit: 0

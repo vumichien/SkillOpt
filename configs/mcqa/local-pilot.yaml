@@ -1,0 +1,42 @@
+_base_: default.yaml
+
+# Pilot: DeepSeek-chat optimizer (cloud, cheap) + local Qwen2.5-7B target (Ollama).
+# Secrets (OPTIMIZER_OPENAI_API_KEY, QWEN_CHAT_*) come from the environment / .env;
+# only the non-secret DeepSeek base_url is set here.
+
+model:
+  reasoning_effort: ""                       # DeepSeek-chat rejects reasoning_effort
+  optimizer_backend: openai_chat
+  target_backend: qwen_chat
+  optimizer: deepseek-chat
+  target: qwen2.5:7b-instruct-q4_K_M          # Ollama tag
+  optimizer_openai_base_url: https://api.deepseek.com/v1
+
+train:
+  train_size: 48
+  batch_size: 16
+  num_epochs: 2
+  seed: 42
+
+gradient:
+  minibatch_size: 8
+  merge_batch_size: 8
+
+optimizer:
+  learning_rate: 4
+  min_learning_rate: 2
+  lr_scheduler: cosine
+  use_slow_update: false
+  use_meta_skill: false
+
+evaluation:
+  use_gate: true
+  eval_test: true
+
+env:
+  name: mcqa
+  skill_init: skillopt/envs/mcqa/skills/initial.md
+  split_mode: split_dir
+  split_dir: data/mcqa_csqa_split
+  max_turns: 1
+  workers: 4

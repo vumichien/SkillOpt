@@ -51,6 +51,7 @@ from skillopt.model import (
     configure_azure_openai,
     configure_claude_code_exec,
     configure_codex_exec,
+    configure_optimizer_openai,
     configure_qwen_chat,
     get_token_summary,
     reset_token_tracker,
@@ -627,6 +628,10 @@ class ReflACTTrainer:
             use_sdk=cfg.get("claude_code_exec_use_sdk", None),
             effort=cfg.get("claude_code_exec_effort", cfg.get("reasoning_effort", "medium")),
             max_thinking_tokens=cfg.get("claude_code_exec_max_thinking_tokens", 16384),
+        )
+        configure_optimizer_openai(
+            base_url=cfg.get("optimizer_openai_base_url") or None,
+            api_key=cfg.get("optimizer_openai_api_key") or None,
         )
         configure_qwen_chat(
             base_url=cfg.get("qwen_chat_base_url") or None,

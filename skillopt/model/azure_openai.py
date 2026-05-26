@@ -99,6 +99,13 @@ TARGET_MANAGED_IDENTITY_CLIENT_ID = (
 OPTIMIZER_DEPLOYMENT = os.environ.get("OPTIMIZER_DEPLOYMENT", "gpt-4o")
 TARGET_DEPLOYMENT = os.environ.get("TARGET_DEPLOYMENT", "gpt-4o")
 
+# Generic OpenAI-compatible optimizer endpoint (e.g. DeepSeek). When BASE_URL is
+# set, the optimizer uses a plain `OpenAI(base_url=...)` client instead of the
+# Azure client, and sends `max_tokens` (not `max_completion_tokens`) with no
+# `reasoning_effort`. Unset → Azure optimizer path is unchanged.
+OPTIMIZER_OPENAI_BASE_URL = os.environ.get("OPTIMIZER_OPENAI_BASE_URL", "").strip()
+OPTIMIZER_OPENAI_API_KEY = os.environ.get("OPTIMIZER_OPENAI_API_KEY", "").strip()
+
 REASONING_EFFORT: str | None = None
 
 _AZ_CLI_TOKEN_CACHE: dict[str, dict[str, Any]] = {}
@@ -177,10 +184,19 @@ tracker = TokenTracker()
 
 # ── Client management ─────────────────────────────────────────────────────────
 
-_optimizer_client: AzureOpenAI | None = None
+_optimizer_client: AzureOpenAI | OpenAI | None = None
 _target_client: AzureOpenAI | None = None
 _optimizer_lock = threading.Lock()
 _target_lock = threading.Lock()
+
+
+def _is_generic_client(client: Any) -> bool:
+    """True for a plain OpenAI-compatible client (e.g. DeepSeek), not Azure.
+
+    Generic endpoints expect `max_tokens` and reject `reasoning_effort` /
+    `max_completion_tokens`, so the chat impls branch on this.
+    """
+    return isinstance(client, OpenAI) and not isinstance(client, AzureOpenAI)
 
 
 def _role_config(role: str) -> dict[str, str]:
@@ -309,11 +325,17 @@ def _make_client(role: str) -> AzureOpenAI:
     )
 
 
-def get_optimizer_client() -> AzureOpenAI:
+def get_optimizer_client() -> AzureOpenAI | OpenAI:
     global _optimizer_client
     with _optimizer_lock:
         if _optimizer_client is None:
-            _optimizer_client = _make_client("optimizer")
+            if OPTIMIZER_OPENAI_BASE_URL:
+                _optimizer_client = OpenAI(
+                    base_url=OPTIMIZER_OPENAI_BASE_URL,
+                    api_key=OPTIMIZER_OPENAI_API_KEY or "dummy",
+                )
+            else:
+                _optimizer_client = _make_client("optimizer")
         return _optimizer_client
 
 
@@ -342,7 +364,7 @@ def _needs_responses_api(deployment: str) -> bool:
 # ── Core chat function ────────────────────────────────────────────────────────
 
 def _chat_impl(
-    client: AzureOpenAI,
+    client: AzureOpenAI | OpenAI,
     deployment: str,
     system: str,
     user: str,
@@ -355,10 +377,11 @@ def _chat_impl(
     """Call LLM, track tokens, return (text, usage_dict)."""
     last_err = None
     usage_info = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    generic = _is_generic_client(client)
 
     for attempt in range(retries):
         try:
-            if _needs_responses_api(deployment):
+            if _needs_responses_api(deployment) and not generic:
                 kwargs: dict[str, Any] = {
                     "model": deployment,
                     "instructions": system,
@@ -393,11 +416,14 @@ def _chat_impl(
                         {"role": "system", "content": system},
                         {"role": "user", "content": user},
                     ],
-                    max_completion_tokens=max_completion_tokens,
                 )
-                actual_effort = reasoning_effort or REASONING_EFFORT
-                if actual_effort is not None:
-                    kwargs["reasoning_effort"] = actual_effort
+                if generic:
+                    kwargs["max_tokens"] = max_completion_tokens
+                else:
+                    kwargs["max_completion_tokens"] = max_completion_tokens
+                    actual_effort = reasoning_effort or REASONING_EFFORT
+                    if actual_effort is not None:
+                        kwargs["reasoning_effort"] = actual_effort
                 if timeout is not None:
                     kwargs["timeout"] = timeout
                 resp = client.chat.completions.create(**kwargs)
@@ -425,7 +451,7 @@ def _chat_impl(
 
 
 def _chat_messages_impl(
-    client: AzureOpenAI,
+    client: AzureOpenAI | OpenAI,
     deployment: str,
     messages: list[dict[str, Any]],
     max_completion_tokens: int,
@@ -441,10 +467,11 @@ def _chat_messages_impl(
     """Call the model with a pre-built message list."""
     last_err = None
     usage_info = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    generic = _is_generic_client(client)
 
     for attempt in range(retries):
         try:
-            if _needs_responses_api(deployment):
+            if _needs_responses_api(deployment) and not generic:
                 input_items, instructions = _messages_to_responses_input(messages)
                 kwargs: dict[str, Any] = {
                     "model": deployment,
@@ -477,16 +504,23 @@ def _chat_messages_impl(
                 kwargs = dict(
                     model=deployment,
                     messages=messages,
-                    max_completion_tokens=max_completion_tokens,
                 )
-                actual_effort = reasoning_effort or REASONING_EFFORT
-                if tools:
-                    kwargs["tools"] = tools
-                    if tool_choice is not None:
-                        kwargs["tool_choice"] = tool_choice
-                    # Some models (e.g. gpt-5.5) don't support reasoning_effort with function tools
-                elif actual_effort is not None:
-                    kwargs["reasoning_effort"] = actual_effort
+                if generic:
+                    kwargs["max_tokens"] = max_completion_tokens
+                    if tools:
+                        kwargs["tools"] = tools
+                        if tool_choice is not None:
+                            kwargs["tool_choice"] = tool_choice
+                else:
+                    kwargs["max_completion_tokens"] = max_completion_tokens
+                    actual_effort = reasoning_effort or REASONING_EFFORT
+                    if tools:
+                        kwargs["tools"] = tools
+                        if tool_choice is not None:
+                            kwargs["tool_choice"] = tool_choice
+                        # Some models (e.g. gpt-5.5) don't support reasoning_effort with function tools
+                    elif actual_effort is not None:
+                        kwargs["reasoning_effort"] = actual_effort
                 if timeout is not None:
                     kwargs["timeout"] = timeout
                 resp = client.chat.completions.create(**kwargs)
@@ -699,6 +733,37 @@ def configure_azure_openai(
         _optimizer_client = None
     with _target_lock:
         _target_client = None
+
+
+def configure_optimizer_openai(
+    *,
+    base_url: str | None = None,
+    api_key: str | None = None,
+) -> None:
+    """Point the optimizer at a generic OpenAI-compatible endpoint (DeepSeek).
+
+    Setting ``base_url`` switches the optimizer to a plain ``OpenAI`` client.
+    Passing empty/None leaves the current value (and thus the Azure path) intact.
+    """
+    global OPTIMIZER_OPENAI_BASE_URL, OPTIMIZER_OPENAI_API_KEY, _optimizer_client
+
+    changed = False
+    if base_url is not None:
+        cleaned = str(base_url).strip()
+        if cleaned:
+            OPTIMIZER_OPENAI_BASE_URL = cleaned
+            os.environ["OPTIMIZER_OPENAI_BASE_URL"] = cleaned
+            changed = True
+    if api_key is not None:
+        cleaned_key = str(api_key).strip()
+        if cleaned_key:
+            OPTIMIZER_OPENAI_API_KEY = cleaned_key
+            os.environ["OPTIMIZER_OPENAI_API_KEY"] = cleaned_key
+            changed = True
+
+    if changed:
+        with _optimizer_lock:
+            _optimizer_client = None
 
 
 def chat_optimizer(

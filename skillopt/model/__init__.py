@@ -367,6 +367,14 @@ def configure_azure_openai(
     )
 
 
+def configure_optimizer_openai(
+    *,
+    base_url: str | None = None,
+    api_key: str | None = None,
+) -> None:
+    _openai.configure_optimizer_openai(base_url=base_url, api_key=api_key)
+
+
 def configure_qwen_chat(
     *,
     base_url: str | None = None,
