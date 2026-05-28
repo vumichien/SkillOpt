@@ -13,8 +13,8 @@ model:
   optimizer_openai_base_url: https://api.deepseek.com/v1
 
 train:
-  train_size: 48
-  batch_size: 16
+  train_size: 100
+  batch_size: 20             # 5 steps/epoch x 2 epochs = 10 steps
   num_epochs: 2
   seed: 42
 
@@ -35,8 +35,8 @@ evaluation:
 
 env:
   name: mcqa
-  skill_init: skillopt/envs/mcqa/skills/initial.md
+  skill_init: skillopt/envs/mcqa/skills/initial-weak.md   # weak init -> leaves headroom for SkillOpt to climb
   split_mode: split_dir
-  split_dir: data/mcqa_csqa_split
+  split_dir: data/mcqa_csqa_split_v2   # 100 train / 100 val / 200 test - stronger gate signal
   max_turns: 1
-  workers: 4
+  workers: 8                  # GPU is at <20% mean util; double rollout concurrency

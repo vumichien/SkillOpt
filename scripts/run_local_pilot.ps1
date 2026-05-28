@@ -45,8 +45,36 @@ if (-not ($tags -match [regex]::Escape($Model))) {
 
 # 4. Run training (PYTHONUTF8 guards config loading on non-UTF8 consoles)
 $env:PYTHONUTF8 = "1"
-$OutRoot = "outputs/mcqa_local_pilot"
+$OutRoot = if ($env:SKILLOPT_OUT_ROOT) { $env:SKILLOPT_OUT_ROOT } else { "outputs/mcqa_local_pilot" }
 $Py = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
+New-Item -ItemType Directory -Force -Path $OutRoot | Out-Null
+
+# 4a. Background GPU sampler -> $OutRoot/gpu.csv (5s interval)
+$GpuLog = Join-Path $OutRoot "gpu.csv"
+$SmiCmd = Get-Command nvidia-smi -ErrorAction SilentlyContinue
+$GpuJob = $null
+if ($SmiCmd) {
+    "timestamp,gpu_util_pct,mem_used_mib,mem_total_mib,temp_c,power_w" | Out-File -FilePath $GpuLog -Encoding ascii
+    $GpuJob = Start-Job -ScriptBlock {
+        param($logPath)
+        while ($true) {
+            $ts = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ss")
+            $row = & nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw --format=csv,noheader,nounits 2>$null
+            if ($row) { "$ts,$($row.Trim())" | Out-File -FilePath $logPath -Append -Encoding ascii }
+            Start-Sleep -Seconds 5
+        }
+    } -ArgumentList $GpuLog
+    Write-Host "[pilot] GPU sampler started (job $($GpuJob.Id)) -> $GpuLog"
+} else {
+    Write-Host "[pilot] nvidia-smi not found; skipping GPU sampler"
+}
+
 Write-Host "[pilot] optimizer=deepseek-chat  target=$Model  out_root=$OutRoot"
-& $Py scripts/train.py --config configs/mcqa/local-pilot.yaml --out_root $OutRoot
-Write-Host "[pilot] done. Artifacts in $OutRoot (best_skill.md, history.json, skills/)"
+$Start = Get-Date
+try {
+    & $Py scripts/train.py --config configs/mcqa/local-pilot.yaml --out_root $OutRoot
+} finally {
+    if ($GpuJob) { Stop-Job -Job $GpuJob -ErrorAction SilentlyContinue; Remove-Job -Job $GpuJob -Force -ErrorAction SilentlyContinue }
+}
+$Elapsed = ((Get-Date) - $Start).TotalSeconds
+Write-Host ("[pilot] done in {0:N1} s. Artifacts in $OutRoot (best_skill.md, history.json, skills/, gpu.csv)" -f $Elapsed)
