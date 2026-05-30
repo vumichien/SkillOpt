@@ -31,10 +31,22 @@ import os
 import random
 import sys
 
-_SUPPORTED = {"commonsense_qa": "tau/commonsense_qa"}
+_SUPPORTED = {
+    "commonsense_qa": "tau/commonsense_qa",
+    "social_i_qa": "allenai/social_i_qa",
+}
+_LICENSES = {
+    "commonsense_qa": "MIT",
+    "social_i_qa": "CC-BY-4.0",
+}
+# allenai/social_i_qa ships a loader script (unsupported by modern `datasets`);
+# the HF auto-conversion bot publishes a parquet branch we load instead.
+_REVISIONS = {
+    "social_i_qa": "refs/convert/parquet",
+}
 
 
-def _convert_row(row: dict) -> dict | None:
+def _convert_csqa_row(row: dict) -> dict | None:
     """Map one CommonsenseQA row to the mcqa schema. None if unusable."""
     labels = list((row.get("choices") or {}).get("label") or [])
     texts = list((row.get("choices") or {}).get("text") or [])
@@ -54,6 +66,33 @@ def _convert_row(row: dict) -> dict | None:
     }
 
 
+# SocialIQA: numeric 1-indexed string label -> mcqa letter; 3 fixed options A/B/C.
+_SIQA_LABEL_TO_LETTER = {"1": "A", "2": "B", "3": "C"}
+
+
+def _convert_siqa_row(row: dict, index: int) -> dict | None:
+    """Map one SocialIQA row to the mcqa schema. None if unusable.
+
+    SocialIQA rows have no id, a separate ``context`` + ``question``, three
+    answer fields ``answerA/B/C`` and a string numeric ``label`` ("1".."3").
+    """
+    context = str(row.get("context") or "").strip()
+    question = str(row.get("question") or "").strip()
+    answers = [str(row.get(k) or "").strip() for k in ("answerA", "answerB", "answerC")]
+    gold = _SIQA_LABEL_TO_LETTER.get(str(row.get("label") or "").strip())
+    if not question or not all(answers) or gold is None:
+        return None  # drop rows with missing fields / out-of-range label
+    return {
+        "id": f"siqa-{index}",
+        "question": (context + "\n" + question).strip() if context else question,
+        "choices": [
+            {"label": letter, "text": text}
+            for letter, text in zip(("A", "B", "C"), answers)
+        ],
+        "answers": [gold],
+    }
+
+
 def _build_pool(dataset_key: str) -> list[dict]:
     try:
         from datasets import load_dataset
@@ -66,13 +105,19 @@ def _build_pool(dataset_key: str) -> list[dict]:
         raise SystemExit(2)
 
     hf_name = _SUPPORTED[dataset_key]
-    ds = load_dataset(hf_name)
+    revision = _REVISIONS.get(dataset_key)
+    ds = load_dataset(hf_name, revision=revision) if revision else load_dataset(hf_name)
     pool: list[dict] = []
-    for split in ("train", "validation"):  # labeled splits only
+    idx = 0  # global running index (SocialIQA has no per-row id)
+    for split in ("train", "validation"):  # labeled splits only; test left untouched
         if split not in ds:
             continue
         for row in ds[split]:
-            converted = _convert_row(row)
+            if dataset_key == "social_i_qa":
+                converted = _convert_siqa_row(row, idx)
+            else:
+                converted = _convert_csqa_row(row)
+            idx += 1
             if converted is not None:
                 pool.append(converted)
     if not pool:
@@ -146,7 +191,7 @@ def main() -> int:
     _write_split(args.out_dir, "test", test)
     meta = {
         "source": _SUPPORTED[args.dataset],
-        "license": "MIT",
+        "license": _LICENSES[args.dataset],
         "seed": args.seed,
         "pool_size": len(pool),
         "counts": {"train": len(train), "val": len(val), "test": len(test)},

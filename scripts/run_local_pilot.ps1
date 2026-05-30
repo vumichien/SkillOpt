@@ -46,6 +46,7 @@ if (-not ($tags -match [regex]::Escape($Model))) {
 # 4. Run training (PYTHONUTF8 guards config loading on non-UTF8 consoles)
 $env:PYTHONUTF8 = "1"
 $OutRoot = if ($env:SKILLOPT_OUT_ROOT) { $env:SKILLOPT_OUT_ROOT } else { "outputs/mcqa_local_pilot" }
+$Config = if ($env:SKILLOPT_CONFIG) { $env:SKILLOPT_CONFIG } else { "configs/mcqa/local-pilot.yaml" }
 $Py = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
 New-Item -ItemType Directory -Force -Path $OutRoot | Out-Null
 
@@ -69,10 +70,15 @@ if ($SmiCmd) {
     Write-Host "[pilot] nvidia-smi not found; skipping GPU sampler"
 }
 
-Write-Host "[pilot] optimizer=deepseek-chat  target=$Model  out_root=$OutRoot"
+Write-Host "[pilot] optimizer=deepseek-chat  target=$Model  config=$Config  out_root=$OutRoot"
 $Start = Get-Date
 try {
-    & $Py scripts/train.py --config configs/mcqa/local-pilot.yaml --out_root $OutRoot
+    # Optional per-seed split override (multi-seed runs reuse one config, vary the split dir).
+    if ($env:SKILLOPT_SPLIT_DIR) {
+        & $Py scripts/train.py --config $Config --split_dir $env:SKILLOPT_SPLIT_DIR --out_root $OutRoot
+    } else {
+        & $Py scripts/train.py --config $Config --out_root $OutRoot
+    }
 } finally {
     if ($GpuJob) { Stop-Job -Job $GpuJob -ErrorAction SilentlyContinue; Remove-Job -Job $GpuJob -Force -ErrorAction SilentlyContinue }
 }

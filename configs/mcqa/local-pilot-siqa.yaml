@@ -1,0 +1,8 @@
+_base_: local-pilot.yaml
+
+# SocialIQA fresh-train: identical v3 hyperparams, only the dataset split changes.
+# Per-seed runs override env.split_dir via the launcher ($env:SKILLOPT_SPLIT_DIR)
+# or a direct --split_dir flag. seed-42 dir is the default below.
+
+env:
+  split_dir: data/mcqa_siqa_split   # 100 train / 300 val / 200 test (seed 42); override per seed

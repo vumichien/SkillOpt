@@ -2,238 +2,86 @@
 status: ready-to-run
 priority: high
 created: 2026-05-28
+updated: 2026-05-29
+supersedes: ARC-Challenge transfer direction (same plan, prior revision)
+design_source: plans/reports/brainstorm-260529-2056-skillopt-siqa-fresh-train-design-report.md
 context_required_for_next_session:
-  - outputs/mcqa_local_pilot_v3/best_skill.md (the artifact under test)
+  - plans/reports/brainstorm-260529-2056-skillopt-siqa-fresh-train-design-report.md (approved design)
+  - skillopt/envs/mcqa/skills/initial-weak.md (weak init under test)
+  - configs/mcqa/local-pilot.yaml (baseline config to extend)
   - docs/articles/medium-skillopt-local-oss-csqa.md (article to update)
-  - configs/mcqa/local-pilot.yaml (working baseline config)
 ---
 
-# Cross-Dataset Validation of SkillOpt on Local OSS Target
+# SkillOpt Fresh-Train on SocialIQA (Local OSS Target)
 
 ## Why this plan exists
 
-Run v3 (`outputs/mcqa_local_pilot_v3/`) showed SkillOpt's optimization loop works mechanically:
-- 3 accepts in 10 candidate edits
-- Val acc 0.86 → 0.90 (monotonic climb)
-- Skill grew 24× into a substantive CSQA prompting guide
+v3 CSQA run proved the loop works mechanically (3/10 accepts, val 0.86 → 0.90 monotonic) but
+test moved −2.0 % (within 95 % CI). Leading cause: **100-item val too small → optimizer fits
+val surface patterns** (a near-duplicate val item baked into the skill).
 
-But test acc moved −2.0 % (within 95 % CI of zero). The leading hypothesis: **the optimizer fits val-specific surface patterns**, including what looks like a near-duplicate of a val item baked into the skill ("lazy watching TV → bored").
+This plan tests the central claim on a **fresh, non-paper dataset**: **does SkillOpt, trained
+from weak init on SocialIQA, produce a held-out TEST lift on a local Qwen2.5-7B** — once the
+overfit is mitigated (3× larger val + multi-seed robustness)?
 
-This plan settles the question with a clean experiment: **does the v3-trained CSQA skill transfer to other MCQA datasets the optimizer never saw?**
+- **Win** → SkillOpt produces a portable test-set gain at the smallest scale anyone will try.
+- **Flat** → still publishable: two datasets, same overfit ceiling, headroom is the real lever.
 
-- **If yes** → SkillOpt learned transferable heuristics. The val/test CSQA gap was binomial noise on n=200 test.
-- **If no** → SkillOpt learned CSQA-specific patterns. Need to upsize val (or hold out part of val from reflect) for cross-domain results.
+Feeds a new headline experiment into the Medium article (`docs/articles/medium-skillopt-local-oss-csqa.md`).
 
-Either outcome is publishable. The Medium article ([`docs/articles/medium-skillopt-local-oss-csqa.md`](../../docs/articles/medium-skillopt-local-oss-csqa.md)) explicitly promises this follow-up.
+## Key decisions (user-confirmed in brainstorm)
 
----
+- **Mode B fresh-train** (not transfer). Within-dataset test lift is the headline.
+- **Dataset = SocialIQA** (`allenai/social_i_qa`, CC-BY-4.0, 3-option). User pick over LogiQA counter-proposal.
+- **Overfit mitigation** = 100 train / **300 val** / 200 test + **3 seeds (42/43/44)**, report mean ± std test delta.
+- **Reuse v3 hyperparams** (weak init, bs=20, 2 epochs, lr=4 cosine, temp=0, workers=8). No `skillopt/` core edits.
+- **"It works" win** = mean test delta > **+3pp** with CI excluding 0.
 
-## What to test (3 datasets, ordered by effort)
+## Honest risk
 
-| Dataset | HF ID | Size | Why pick it | Difficulty signal |
-|---|---|---|---|---|
-| **ARC-Challenge** | `allenai/ai2_arc` config `ARC-Challenge` | ~2.6k labeled | Harder grade-school science MC, 4 options, GPT-4 zero-shot ~95 % | Qwen2.5-7B baseline likely 70-80 % |
-| **OpenBookQA** | `allenai/openbookqa` config `main` | ~5k labeled | Elementary science with retrieval-style facts, 4 options | Qwen2.5-7B baseline likely 75-85 % |
-| **BoolQ** (stretch) | `google/boolq` | ~16k labeled | Yes/No questions — different schema, tests skill robustness | Qwen2.5-7B baseline likely 80-85 % |
+SocialIQA ~74 % baseline = same regime as CSQA (~76 %). Test may stay flat even with mitigations;
+they make a *small real* lift detectable, they cannot manufacture headroom. Flat result → honest
+2-dataset framing. (LogiQA/ReClor had more real headroom but user chose SocialIQA.)
 
-ARC-Challenge first (cleanest comparison with CSQA: both 5- or 4-way MC, both common-sense style).
+## Phases
 
----
+| # | Phase | Status | File |
+|---|---|---|---|
+| 1 | SocialIQA data prep | ✅ done | [phase-01-socialiqa-data-prep.md](phase-01-socialiqa-data-prep.md) |
+| 2 | Config, launcher override, training runs (3 seeds) | ✅ done | [phase-02-config-launcher-training-runs.md](phase-02-config-launcher-training-runs.md) |
+| 3 | Multi-seed analysis + article update | ✅ done — article updated with flat 3-seed result, config, + why-it-failed/why-paper-worked analysis | [phase-03-multiseed-analysis-article-update.md](phase-03-multiseed-analysis-article-update.md) |
+| 4 | (Stretch) cross-dataset transfer eval | script written + compiles; eval not run (deprioritized — flat core result, article not updated) | [phase-04-stretch-cross-dataset-transfer-eval.md](phase-04-stretch-cross-dataset-transfer-eval.md) |
 
-## Two evaluation modes
+## Result (2026-05-30)
 
-### Mode A: zero-shot transfer (the main experiment)
+**FLAT — does not prove SkillOpt works on SocialIQA.** 3-seed mean test Δ = **+0.33pp** (std 0.29pp; per-seed +0.5 / 0.0 / +0.5pp). Each non-zero delta = exactly 1 test item on n=200 → noise. Win bar (mean >+3pp, CI excluding 0) not met.
 
-Apply the **v3 trained CSQA skill** to ARC-Challenge **without any further SkillOpt training**.
+| Seed | Base val | Best val | Base test | Trained test | Test Δ | Accepts | Wall s |
+|------|---|---|---|---|---|---|---|
+| 42 | 0.817 | 0.830 | 0.785 | 0.790 | +0.5pp | 2 | 1312 |
+| 43 | 0.837 | 0.837 | 0.780 | 0.780 | 0.0pp | 0 (gate never fired) | 1482 |
+| 44 | 0.763 | 0.787 | 0.805 | 0.810 | +0.5pp | 2 | 1248 |
 
-```
-baseline_acc = run weak init on ARC-Challenge test
-transfer_acc = run v3 best_skill.md on ARC-Challenge test
-```
+**Cause:** headroom ceiling the plan flagged. Weak-init baselines were 0.76–0.84 val — too high to climb (seed 43 had no candidate beating its 0.837 baseline). Same regime as CSQA v3. **Article updated** (`docs/articles/medium-skillopt-local-oss-csqa.md`): added "Experiment 2" (SocialIQA setup + config + 3-seed table), a "Why it didn't work here — and why it worked in the paper" analysis (headroom / procedure-vs-knowledge / gate-as-noise-amplifier / scale), TL;DR update, and reconciled the scaffolded Experiment 3. *(Initial run honored an earlier "only if it proves SkillOpt works" gate; user subsequently asked to write the flat result honestly with analysis.)*
 
-- **If `transfer_acc > baseline_acc`** by more than the 95 % CI → the skill carries.
-- **If indistinguishable** → CSQA-specific. Confirms overfit hypothesis.
+**Open question 1 RESOLVED:** HF `allenai/social_i_qa` (via parquet branch `refs/convert/parquet` — the loader script is unsupported by modern `datasets`) exposes only `train` (33,410) + `validation` (1,954) = 35,364 labeled rows; no labeled `test`. Pooled train+validation, matching the CSQA approach.
 
-This needs **no training run** — just two eval passes. ~15 minutes of GPU time. **Run this first.**
+## Key dependencies
 
-### Mode B: full SkillOpt loop on ARC-Challenge
-
-Train a new skill from weak init on ARC-Challenge (same hyperparams as v3). Compare:
-- ARC weak baseline vs ARC-trained skill (within-dataset improvement)
-- ARC-trained skill vs v3 CSQA-trained skill (cross-dataset)
-
-This produces the v4 datapoint that completes the matrix.
-
----
-
-## Concrete tasks (next session checklist)
-
-### Task 1: extend `scripts/prepare_mcqa_data.py` to handle ARC-Challenge
-
-The script already has a `--dataset` flag with `_SUPPORTED` set. Check `scripts/prepare_mcqa_data.py:118` for the existing structure.
-
-**Acceptance criteria:**
-- Add `arc_challenge` to `_SUPPORTED`
-- Add an HF-row → mcqa-row mapper (note: ARC labels are sometimes "1/2/3/4" or "A/B/C/D" — normalize to letters)
-- `python scripts/prepare_mcqa_data.py --dataset arc_challenge --n-train 100 --n-val 100 --n-test 200 --out-dir data/mcqa_arc_split --self-check` passes
-
-**Heads-up:** ARC has its own train/val/test splits with labeled test (unlike CSQA where test labels are hidden). Use all three labeled splits when sampling 400 items.
-
-### Task 2: write `scripts/eval_skill_on_dataset.py` (transfer eval, no training)
-
-A small script that:
-1. Loads a skill markdown file (path arg)
-2. Loads a split (default `test`) of a dataset
-3. Runs the mcqa rollout on each item with that skill
-4. Prints acc + per-item results
-
-This is essentially `scripts/smoke_test_pipeline.py` parameterized.
-
-```bash
-.venv\Scripts\python.exe scripts/eval_skill_on_dataset.py \
-    --skill outputs/mcqa_local_pilot_v3/best_skill.md \
-    --split-dir data/mcqa_arc_split \
-    --split test \
-    --out-dir outputs/transfer_v3_to_arc
-```
-
-Output: `outputs/transfer_v3_to_arc/{results.jsonl, summary.json}`.
-
-**~30 LOC. Should use `run_batch` from `skillopt/envs/mcqa/batch_runner.py:35` directly.**
-
-### Task 3: run the transfer experiment (Mode A)
-
-```powershell
-# 1. Generate ARC splits
-.venv\Scripts\python.exe scripts\prepare_mcqa_data.py `
-    --dataset arc_challenge --n-train 100 --n-val 100 --n-test 200 `
-    --out-dir data/mcqa_arc_split
-
-# 2. Eval weak baseline on ARC test
-.venv\Scripts\python.exe scripts\eval_skill_on_dataset.py `
-    --skill skillopt/envs/mcqa/skills/initial-weak.md `
-    --split-dir data/mcqa_arc_split --split test `
-    --out-dir outputs/transfer_weak_to_arc
-
-# 3. Eval v3 CSQA-trained skill on ARC test
-.venv\Scripts\python.exe scripts\eval_skill_on_dataset.py `
-    --skill outputs/mcqa_local_pilot_v3/best_skill.md `
-    --split-dir data/mcqa_arc_split --split test `
-    --out-dir outputs/transfer_v3_to_arc
-```
-
-Compare `summary.json` from both. Record the delta.
-
-**Expected runtime**: 2 × ~6 min = ~12 min total (200 test items × ~2s/item).
-
-### Task 4: (if transfer is null) run full SkillOpt loop on ARC (Mode B)
-
-Only do this if Task 3 shows no transfer. New config:
-
-```yaml
-# configs/mcqa/local-pilot-arc.yaml
-_base_: local-pilot.yaml
-env:
-  split_dir: data/mcqa_arc_split
-```
-
-Run:
-```powershell
-$env:SKILLOPT_OUT_ROOT = "outputs/mcqa_arc_pilot"
-.\scripts\run_local_pilot.ps1 --config configs/mcqa/local-pilot-arc.yaml
-```
-
-(Launcher currently hardcodes the config path — Task 4 may need a small launcher edit to accept `--config`.)
-
-**Expected runtime**: ~12 min (same as v3).
-
-### Task 5: update the Medium article
-
-The article (`docs/articles/medium-skillopt-local-oss-csqa.md`) has a placeholder section near the end:
-
-> *"What's next (an update is coming)"*
-
-Replace that section with:
-
-#### If transfer worked (`transfer_acc > weak_baseline_acc + 3%`):
-> **Update [date]:** Tested the v3 CSQA-trained skill on ARC-Challenge (200 test items, no further training). Weak baseline: X %. v3 skill: Y % (+Z pp). The heuristics SkillOpt wrote — keyword matching, step-by-step reasoning, causal/functional core — generalize beyond the dataset they were tuned on. The val/test gap in the CSQA run was statistical noise on n=200 test, not overfit.
-
-#### If transfer was null (within CI):
-> **Update [date]:** Tested the v3 skill on ARC-Challenge (200 items) — no measurable lift over weak baseline (delta < binomial CI). Confirms the CSQA val/test gap was overfit. Ran a fresh SkillOpt loop on ARC (Mode B): val 0.X → 0.Y, test +/- Z pp. **Takeaway:** SkillOpt's loop works per-dataset but the skills it writes don't yet transfer. The next step is enlarging the val split to dilute val-specific learning, or holding part of val out of reflect's reach.
-
-Add a comparison table:
-
-| Skill | CSQA test (200) | ARC-Challenge test (200) |
-|---|---|---|
-| Weak init | 76 % (baseline) | ?? |
-| v3 (CSQA-trained) | 74 % | ?? |
-| v4 (ARC-trained, if Mode B) | — | ?? |
-
-Then commit with `feat: extend SkillOpt validation to ARC-Challenge` (no `chore`/`docs` per project rules since this is real content delivery).
-
----
-
-## File ownership (next session)
-
-| New file | Purpose | Estimated LOC |
-|---|---|---|
-| `scripts/prepare_mcqa_data.py` (extend) | Add ARC dataset support | +30 LOC |
-| `scripts/eval_skill_on_dataset.py` (new) | Transfer eval script | ~80 LOC |
-| `configs/mcqa/local-pilot-arc.yaml` (new) | ARC training config | ~5 LOC |
-| `docs/articles/medium-skillopt-local-oss-csqa.md` (edit) | Update with transfer results | replace 1 section |
-| `outputs/transfer_v3_to_arc/` (new) | Result artifacts | data, not LOC |
-| `outputs/transfer_weak_to_arc/` (new) | Baseline artifacts | data, not LOC |
-
-No edits to `skillopt/` core code expected. If they are, file an issue first.
-
----
-
-## Context the next session needs (paste into prompt)
-
-```
-You are continuing the SkillOpt local-OSS validation work. Background:
-
-- v3 pilot complete: SkillOpt accepted 3/10 candidate edits on CSQA, val
-  0.86 → 0.90, but test moved -2.0 % (within 95% CI). Trained skill at
-  outputs/mcqa_local_pilot_v3/best_skill.md, 3.6 KB.
-- Medium article drafted at docs/articles/medium-skillopt-local-oss-csqa.md
-  with an explicit "update coming" section that needs cross-dataset data.
-
-Current task (this plan): plans/260528-1847-skillopt-cross-dataset-validation/plan.md
-
-Hardware/env unchanged: RTX 3080 + Ollama + Qwen2.5-7B-Instruct Q4_K_M
-+ DeepSeek-chat. .env.local-pilot is already configured. Working venv at
-.venv (uv-managed, datasets package already installed).
-
-Start with Task 3 (Mode A transfer eval) — it's the cheapest experiment
-that settles the central question. Only proceed to Task 4 (Mode B full
-training on ARC) if transfer is null.
-```
-
----
+- Hardware/env unchanged: RTX 3080 + Ollama + Qwen2.5-7B-Instruct Q4_K_M + DeepSeek-chat. `.env.local-pilot` configured. `.venv` (uv-managed, `datasets` installed).
+- Phase 2 depends on Phase 1 (splits exist). Phase 3 depends on Phase 2 (run summaries). Phase 4 independent (needs Phase 1 splits + v3 skill only).
 
 ## Success criteria
 
-- **Minimum**: Task 3 completes with a `summary.json` from both eval runs, recorded in the article update.
-- **Target**: Tasks 1-3 + article updated and committed within 1 hour of session start.
-- **Stretch**: Task 4 (Mode B full ARC training) for the complete matrix.
+- **Min**: 1 run (seed 42) completes; `baseline_test` vs `test` recorded; article updated.
+- **Target**: 3-seed mean test delta ± std; article SocialIQA section written + committed.
+- **Stretch**: Phase 4 transfer matrix cells filled.
 
----
+## Runtime / cost
 
-## Risks and mitigations
+~25–35 min GPU/run (300-val gate is the driver) + ~3–5¢ DeepSeek. 3 seeds ≈ 90 min + ~12¢. Stretch ~12 min + ~$0.
 
-| Risk | Mitigation |
-|---|---|
-| ARC HF dataset has different label format (1-4 vs A-D) | Normalize in `_convert_row` mapper; add to self-check |
-| Qwen2.5-7B baseline on ARC too high (>90 %) → no headroom | If so, fall back to ARC-Challenge HARD subset or BoolQ |
-| `eval_skill_on_dataset.py` becomes a re-implementation of trainer's eval path | Use `run_batch` directly from `skillopt/envs/mcqa/batch_runner.py:35`; don't re-invent |
-| Article update gets stale if transfer experiment takes weeks | Time-box: if Task 3 isn't done in 30 min, ship the article as-is with caveat removed |
+## Open questions
 
----
-
-## Open questions (for the next session)
-
-1. **Multi-seed gate.** Should we re-run v3 with 3-seed val evaluation (vote across 3 deterministic runs with different shuffles) to check if the v3 +4 % val was robust to subsampling? Cheap (~30 min) and adds rigor to the article.
-2. **Hold part of val out of reflect.** Currently the optimizer can in principle see val items via failure analysis hooks. Worth auditing `skillopt/gradient/reflect.py` to confirm train-only fed to reflect.
-3. **Larger optimizer model.** Would `deepseek-reasoner` (~10× cost, ~$0.10 per run) propose more transferable heuristics? Worth one run as a sensitivity check.
-4. **Different target.** Run the same v3 trained skill against Qwen2.5-14B or 32B (if VRAM allows on the 3080 with offload) — does a smarter target benefit *more* from the skill, or has it already internalized these heuristics?
+1. SocialIQA HF test-label visibility — design assumes HF test labels hidden → pool train+validation (~35k labeled). Researcher claimed a visible 7k test split. **Verify on first `load_dataset`** (Phase 1 self-check).
+2. Execute training in-session vs user triggers GPU run later (Ollama warm-up, GPU availability).
