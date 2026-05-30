@@ -2,7 +2,7 @@
 
 > Microsoft's SkillOpt treats prompts like neural-network weights — epochs, batch size, learning rate, validation gate. I tested whether the loop still works when the target shrinks to a 7B local model and the optimizer is a cloud LLM that costs pennies. 12 minutes, three cents, three honest findings.
 
-*Last updated: 2026-05-30. Now includes a second dataset (SocialIQA, 3 seeds) and an analysis of why the loop stays flat on commonsense MC while the paper's heavyweight benchmarks lift +9–25 pp — see "Experiment 2" and "Why it didn't work here" below.*
+*Last updated: 2026-05-30. Now includes a second dataset (SocialIQA, 3 seeds), a cross-dataset transfer matrix, and an analysis of why the loop stays flat on commonsense MC while the paper's heavyweight benchmarks lift +9–25 pp — see "A second dataset: SocialIQA" and "Why it didn't work here" below.*
 
 ---
 
@@ -22,7 +22,7 @@ Three runs, ~30 minutes of GPU time, **~3¢ of DeepSeek spend** (200k prompt + 2
 
 A (lightly trimmed) excerpt of the skill SkillOpt wrote is at the bottom of this post; the verbatim version lives in `outputs/mcqa_local_pilot_v3/best_skill.md`. Either way, it reads like a prompt-engineering guide a human would write.
 
-**Update — a second dataset confirms the ceiling.** I re-ran the whole loop on **SocialIQA** (a different commonsense benchmark the paper never tested), with the overfit fix (3× larger val) and **3 seeds**. Mean held-out test delta: **+0.33 pp (± 0.29)** — flat again. One seed's gate never fired at all, because the weak-init baseline was already 0.84. The loop is real; the *task* has no headroom for it. Full numbers and the "why" in **Experiment 2** and **Why it didn't work here** below.
+**Update — a second dataset confirms the ceiling.** I re-ran the whole loop on **SocialIQA** (a different commonsense benchmark the paper never tested), with the overfit fix (3× larger val) and **3 seeds**. Mean held-out test delta: **+0.33 pp (± 0.29)** — flat again. One seed's gate never fired at all, because the weak-init baseline was already 0.84. The loop is real; the *task* has no headroom for it. And neither trained skill transfers to the other dataset (full matrix below). Full numbers and the "why" in **A second dataset: SocialIQA** and **Why it didn't work here** below.
 
 ---
 
@@ -263,7 +263,7 @@ That makes the next experiments the interesting ones.
 
 ---
 
-## Experiment 2: a second dataset, the overfit fix, and three seeds (SocialIQA)
+## A second dataset: SocialIQA — the overfit fix and three seeds
 
 The v3 CSQA result left one nagging question: was the flat test number a CSQA quirk, or something structural? So I ran the entire loop again on a commonsense benchmark **the paper never touched** — SocialIQA — from the same weak init, and this time with the overfit mitigations the v3 post-mortem called for.
 
@@ -382,18 +382,26 @@ Artifacts land in `outputs/mcqa_local_pilot/`:
 
 ## What's coming next
 
-The v3 result tees up an experimental matrix that I'll fill in over the coming weeks. **I'll update this post in-place** as each row lands; for now, the rows are scaffolded so you can see the plan.
+The v3 result teed up an experimental matrix I've been filling in. **Experiments 1 and 3 are now done** (the SocialIQA fresh-train and the cross-dataset transfer matrix above); **Experiments 2 and 4 remain open**. **I update this post in-place** as each row lands.
 
-### Experiment 1 — Cross-dataset transfer (the central question)
+### Experiment 1 — Cross-dataset transfer (the central question) — ✅ done
 
-Take the v3-trained skill, run it on MCQA datasets the optimizer never saw. If the heuristics SkillOpt wrote ("avoid keyword matching", "identify the causal core") are transferable knowledge, they should hold up. If they're CSQA-specific patterns, they won't.
+Take each trained skill and run it zero-shot on the *other* dataset's held-out test set. If the heuristics SkillOpt wrote are transferable knowledge, they should hold up off-domain. If they're dataset-specific patterns, they won't. (Mode A — pure zero-shot eval, no further training; ~$0 optimizer spend.)
 
-| Skill | CSQA test (200) | ARC-Challenge (200) | OpenBookQA (200) |
-|---|---|---|---|
-| Weak init | 0.760 | _coming_ | _coming_ |
-| **v3 (CSQA-trained)** | 0.740 | **_coming_** | **_coming_** |
+| Skill ↓ / test → | CSQA test (200) | SocialIQA test (200) |
+|---|---|---|
+| Weak init | 0.760 | 0.775 |
+| v3 (CSQA-trained) | 0.740 | **0.775** |
+| SocialIQA-trained (seed 44) | **0.730** | 0.790 |
 
-Cost: two eval passes, ~12 min of GPU, ~$0 of optimizer spend. This is Mode A — pure zero-shot transfer, no further training. **Result drops here first.**
+**The off-diagonal cells are the answer: there is no positive transfer.**
+
+- **CSQA-trained skill on SocialIQA = 0.775 — identical to the weak init (0.775).** Three accepts' worth of CSQA heuristics ("identify the causal core", the lazy-watching-TV example) made *exactly zero* difference on SocialIQA. Not portable knowledge; CSQA-shaped patterns.
+- **SocialIQA-trained skill on CSQA = 0.730 — slightly *below* the weak init (0.760).** The SocialIQA rubric ("temporal anchoring for future actions", "social causality") is mildly *counterproductive* on CSQA: it imposes a social-reasoning frame on questions that aren't social.
+
+Each trained skill helps (a little) at most on its own dataset and never on the other. That's the cleanest possible confirmation of the headroom story: SkillOpt isn't writing general reasoning knowledge a 7B lacks — it's writing thin, dataset-specific scaffolding whose ceiling is the few items the base model was already on the fence about.
+
+*(Splits are canonical: CSQA = the v3 `csqa_split_v2` test; SocialIQA = the seed-42 test. The CSQA-column weak/v3 numbers are from the v3 run; the rest from `scripts/eval_skill_on_dataset.py`, all temp=0, errors=0.)*
 
 ### Experiment 2 — Multi-seed gate (rigor check)
 
@@ -406,7 +414,7 @@ Re-run v3 with 3-seed val evaluation (vote across 3 deterministic shuffles). If 
 
 ### Experiment 3 — Fresh SkillOpt loop from weak init (Mode B) — ✅ done
 
-This one landed: I trained a *new* skill from weak init on **SocialIQA** (chosen over ARC for a cleaner 3-option commonsense task), across 3 seeds with the larger-val overfit fix. Result is the **"Experiment 2: a second dataset"** section above — mean test Δ **+0.33 pp (± 0.29)**, flat. The "Why it didn't work here" section explains the headroom ceiling that caps both CSQA and SocialIQA on a 7B target.
+This one landed: I trained a *new* skill from weak init on **SocialIQA** (chosen over ARC for a cleaner 3-option commonsense task), across 3 seeds with the larger-val overfit fix. Result is the **"A second dataset: SocialIQA"** section above — mean test Δ **+0.33 pp (± 0.29)**, flat. The "Why it didn't work here" section explains the headroom ceiling that caps both CSQA and SocialIQA on a 7B target.
 
 ### Experiment 4 — Bigger target (stretch)
 

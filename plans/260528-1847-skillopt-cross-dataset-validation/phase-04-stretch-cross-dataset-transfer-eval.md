@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "(Stretch) Cross-Dataset Transfer Eval"
-status: script-written-eval-not-run   # scripts/eval_skill_on_dataset.py created + compiles; eval deprioritized (flat core result, article not updated)
+status: done   # eval ran (4 cells, errors=0); transfer matrix filled in article. No positive transfer: CSQA-skill→SocialIQA 0.775=weak; SocialIQA-skill→CSQA 0.730<weak 0.760
 priority: P3
 effort: "1h"
 dependencies: [1]

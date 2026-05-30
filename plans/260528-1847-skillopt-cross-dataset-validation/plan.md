@@ -50,7 +50,17 @@ they make a *small real* lift detectable, they cannot manufacture headroom. Flat
 | 1 | SocialIQA data prep | ✅ done | [phase-01-socialiqa-data-prep.md](phase-01-socialiqa-data-prep.md) |
 | 2 | Config, launcher override, training runs (3 seeds) | ✅ done | [phase-02-config-launcher-training-runs.md](phase-02-config-launcher-training-runs.md) |
 | 3 | Multi-seed analysis + article update | ✅ done — article updated with flat 3-seed result, config, + why-it-failed/why-paper-worked analysis | [phase-03-multiseed-analysis-article-update.md](phase-03-multiseed-analysis-article-update.md) |
-| 4 | (Stretch) cross-dataset transfer eval | script written + compiles; eval not run (deprioritized — flat core result, article not updated) | [phase-04-stretch-cross-dataset-transfer-eval.md](phase-04-stretch-cross-dataset-transfer-eval.md) |
+| 4 | (Stretch) cross-dataset transfer eval | ✅ done — 4-cell matrix filled in article; no positive transfer | [phase-04-stretch-cross-dataset-transfer-eval.md](phase-04-stretch-cross-dataset-transfer-eval.md) |
+
+### Transfer matrix (Phase 4, `outputs/transfer/`, all temp=0, errors=0)
+
+| skill ↓ / test → | CSQA test (200) | SocialIQA test (200) |
+|---|---|---|
+| Weak init | 0.760 | 0.775 |
+| v3 (CSQA-trained) | 0.740 | 0.775 |
+| SocialIQA-trained (seed 44) | 0.730 | 0.790 |
+
+**No positive transfer.** CSQA-skill→SocialIQA = weak init exactly (0.775); SocialIQA-skill→CSQA = 0.730 < weak 0.760 (mildly counterproductive off-domain). Skills are dataset-specific scaffolding, not portable knowledge — corroborates the headroom/flat story.
 
 ## Result (2026-05-30)
 
