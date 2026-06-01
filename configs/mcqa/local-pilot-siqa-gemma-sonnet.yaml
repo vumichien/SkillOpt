@@ -1,0 +1,9 @@
+# SocialIQA on the gemma3:4b target, Sonnet optimizer arm.
+# Cross-target Sonnet cell: inherits SIQA split + gemma3:4b target from local-pilot-siqa-gemma.yaml
+# and swaps only the optimizer to claude-sonnet-4-6 (Anthropic, keyed by OPTIMIZER_CLAUDE_API_KEY).
+_base_: local-pilot-siqa-gemma.yaml
+
+model:
+  optimizer: claude-sonnet-4-6
+  optimizer_openai_base_url: https://api.anthropic.com/v1
+  optimizer_openai_api_key_env: OPTIMIZER_CLAUDE_API_KEY

@@ -1,0 +1,9 @@
+# CommonsenseQA on the gemma3:4b target, Sonnet optimizer arm.
+# Cross-target Sonnet cell: inherits CSQA split + gemma3:4b target from local-pilot-csqa-gemma.yaml
+# and swaps only the optimizer to claude-sonnet-4-6 (Anthropic, keyed by OPTIMIZER_CLAUDE_API_KEY).
+_base_: local-pilot-csqa-gemma.yaml
+
+model:
+  optimizer: claude-sonnet-4-6
+  optimizer_openai_base_url: https://api.anthropic.com/v1
+  optimizer_openai_api_key_env: OPTIMIZER_CLAUDE_API_KEY

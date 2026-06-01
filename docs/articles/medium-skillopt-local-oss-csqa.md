@@ -411,7 +411,7 @@ Three things the grid makes unmissable:
 
 3. **It directly closes the open question I left last time.** The prior section ended by saying the experiment worth running was a task where the 7B starts well below ceiling — *LogiQA, ReClor*. Qwen2.5-7B on LogiQA starts at **0.585**, comfortably below ceiling, exactly the regime I said might unlock the loop. It returned **+0.5 pp**. The lower-baseline task didn't rescue the result; it joined it.
 
-*(Reproduce any cell: the six configs are `configs/mcqa/local-pilot{,-siqa,-logiqa}{,-gemma,-qwen}.yaml`; artifacts under `outputs/{csqa,siqa,logiqa}-train/deepseek-v4-pro/<target>-s42/`. A separate Claude-Sonnet optimizer arm — same grid, swap only the optimizer API — is queued; I'll add it as the matching row when it lands.)*
+*(Reproduce any cell: the six configs are `configs/mcqa/local-pilot{,-siqa,-logiqa}{,-gemma,-qwen}.yaml`; artifacts under `outputs/{csqa,siqa,logiqa}-train/deepseek-v4-pro/<target>-s42/`. The matching Claude-Sonnet-4-6 optimizer arm — same grid, swap only the optimizer API — is done too; the head-to-head is in **Experiment 5** below.)*
 
 ---
 
@@ -511,14 +511,31 @@ Run the same v3-trained skill against Qwen2.5-14B (with offload) or Qwen2.5-32B 
 | **Qwen2.5-14B** | _coming_ | _coming_ |
 | **Qwen2.5-32B** | _coming_ | _coming_ |
 
-### Experiment 5 — Does the optimizer model matter? (DeepSeek arm ✅ done)
+### Experiment 5 — Does the optimizer model matter? — ✅ done
 
-Hold target, data, and weak init fixed; change *only* the LLM that rewrites the skill. The **DeepSeek-V4-Pro** half is the **"A stronger optimizer and a full target × dataset grid"** section above — six cells, mean test Δ **−0.6 pp**, flat. The matching **Claude-Sonnet** arm (same grid, swap only the optimizer endpoint) is queued; this row gets the head-to-head when it lands.
+Hold target, data, and weak init fixed; change *only* the LLM that rewrites the skill. The **DeepSeek-V4-Pro** half is the **"A stronger optimizer and a full target × dataset grid"** section above. To rule out "DeepSeek isn't smart enough to find the lift", I re-ran the *entire* six-cell grid with a frontier optimizer — **Claude-Sonnet-4-6** — swapping only the API the skill-writer talks to. Same weak init, same v3 hyperparams, same seed 42, same local targets.
 
 | Optimizer | Mean test Δ (2 targets × 3 datasets) | Verdict |
 |---|---|---|
 | DeepSeek-V4-Pro | **−0.6 pp** | flat |
-| **Claude-Sonnet-4-6** | _coming_ | _coming_ |
+| **Claude-Sonnet-4-6** | **−1.2 pp** | flat (marginally worse, within noise) |
+
+Cell by cell, the two optimizers are indistinguishable from each other and from zero:
+
+| Dataset | Target | DeepSeek Δ | Sonnet Δ | Sonnet accepts |
+|---|---|---|---|---|
+| CSQA | Qwen2.5-7B | +1.5 pp | −2.0 pp | 2 |
+| CSQA | gemma3:4b | +0.5 pp | −1.5 pp | 2 |
+| SocialIQA | Qwen2.5-7B | +1.0 pp | +0.5 pp | 4 |
+| SocialIQA | gemma3:4b | −2.0 pp | −2.5 pp | 2 |
+| LogiQA | Qwen2.5-7B | +0.5 pp | −1.5 pp | 1 |
+| LogiQA | gemma3:4b | −5.0 pp | +0.0 pp | 0 |
+
+**The frontier optimizer made it no better — slightly worse, and that gap is itself noise.** Every Sonnet delta lands in **[−2.5, +0.5] pp**, all inside ±1 SE. Sonnet wrote real, accepted edits (11 accepts across the grid vs DeepSeek's 15) and still landed flat. The model writing the skill is not the lever — full stop, now confirmed across the two endpoints people would actually reach for.
+
+One detail makes the noise floor concrete: the **arm-1 baselines should be identical across the two arms** — same weak-init skill, same target, the optimizer isn't even involved yet — yet they drift by up to **3.5 pp** between runs (gemma×LogiQA baseline 0.375 with DeepSeek's run, 0.410 with Sonnet's). That run-to-run jitter on the *untouched* baseline is larger than most of the "training" deltas in either matrix. When the measurement noise on doing nothing exceeds the effect of doing something, the effect is zero. That's the whole result, in one number.
+
+*(Reproduce: Sonnet configs are `configs/mcqa/local-pilot{,-siqa,-logiqa}-sonnet.yaml` plus the three cross-target `*-{csqa-gemma,siqa-gemma,logiqa-qwen}-sonnet.yaml`, each inheriting its DeepSeek cell and overlaying only the optimizer; artifacts under `outputs/{csqa,siqa,logiqa}-train/sonnet-4-6/<target>-s42/`.)*
 
 ---
 
