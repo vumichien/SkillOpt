@@ -1,16 +1,19 @@
 _base_: default.yaml
 
-# Pilot: DeepSeek-chat optimizer (cloud, cheap) + local Qwen2.5-7B target (Ollama).
-# Secrets (OPTIMIZER_OPENAI_API_KEY, QWEN_CHAT_*) come from the environment / .env;
-# only the non-secret DeepSeek base_url is set here.
+# Pilot: DeepSeek-V4-Pro optimizer (direct DeepSeek API) + local Qwen2.5-7B target (Ollama).
+# Secrets (OPTIMIZER_OPENAI_API_KEY for DeepSeek, QWEN_CHAT_*) come from .env; only the
+# non-secret base_url + key-env name live here. This is the DeepSeek optimizer arm; the
+# Sonnet arm overlays (local-pilot-*-sonnet.yaml) swap the optimizer to the Anthropic API.
+# To reproduce the older article numbers instead, set optimizer back to deepseek-chat.
 
 model:
-  reasoning_effort: ""                       # DeepSeek-chat rejects reasoning_effort
+  reasoning_effort: ""                       # leave empty; DeepSeek optimizer uses its default
   optimizer_backend: openai_chat
   target_backend: qwen_chat
-  optimizer: deepseek-chat
+  optimizer: deepseek-v4-pro                   # DeepSeek arm (strong V4 tier); deepseek-chat is the deprecated weak alias
   target: qwen2.5:7b-instruct-q4_K_M          # Ollama tag
   optimizer_openai_base_url: https://api.deepseek.com/v1
+  optimizer_openai_api_key_env: OPTIMIZER_OPENAI_API_KEY
 
 train:
   train_size: 100

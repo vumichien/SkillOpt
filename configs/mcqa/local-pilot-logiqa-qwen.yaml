@@ -1,0 +1,9 @@
+# LogiQA on the Qwen2.5-7B target (DeepSeek optimizer arm).
+# Cross-target cell: same LogiQA split as local-pilot-logiqa.yaml but swaps the target
+# from gemma3:4b to qwen2.5-7b, so the full 2-target x 3-dataset matrix has a qwen LogiQA cell.
+_base_: local-pilot-logiqa.yaml
+
+model:
+  target: qwen2.5:7b-instruct-q4_K_M
+
+# LogiQA split + all loop hyperparams / weak init inherited.

@@ -5,7 +5,17 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $ProjectRoot
 
-# 1. Load .env.local-pilot if present
+# 1. Load .env.local-pilot if present (secrets + temp pinning only).
+# The target model is NOT taken from the environment — it comes from the config's
+# model.target (resolved below), so a stray TARGET_DEPLOYMENT line in .env can never pick
+# the wrong model. A caller may still pre-set non-secret orchestration vars (config / split
+# / seed / out_root) to drive a matrix; snapshot and restore them so .env can't clobber.
+$OrchKeys = @("SKILLOPT_CONFIG", "SKILLOPT_SPLIT_DIR", "SKILLOPT_SEED", "SKILLOPT_OUT_ROOT")
+$CallerOrch = @{}
+foreach ($k in $OrchKeys) {
+    $v = [Environment]::GetEnvironmentVariable($k)
+    if ($v) { $CallerOrch[$k] = $v }
+}
 $EnvFile = Join-Path $ProjectRoot ".env.local-pilot"
 if (Test-Path $EnvFile) {
     Get-Content $EnvFile | ForEach-Object {
@@ -17,19 +27,31 @@ if (Test-Path $EnvFile) {
             Set-Item -Path "Env:$key" -Value $val
         }
     }
-    Write-Host "[pilot] loaded $EnvFile"
+    foreach ($k in $CallerOrch.Keys) { Set-Item -Path "Env:$k" -Value $CallerOrch[$k] }
+    Write-Host "[pilot] loaded $EnvFile (preserved caller orchestration: $($CallerOrch.Keys -join ', '))"
 } else {
     Write-Host "[pilot] no .env.local-pilot found; relying on current environment"
 }
 
-# 2. Fail fast if the DeepSeek optimizer key is missing
-if (-not $env:OPTIMIZER_OPENAI_API_KEY) {
-    Write-Error "OPTIMIZER_OPENAI_API_KEY is not set. Copy .env.local-pilot.example to .env.local-pilot and fill it in."
+# 2. Fail fast if no optimizer key is present. DeepSeek arm uses OPTIMIZER_OPENAI_API_KEY;
+#    Sonnet arm uses OPTIMIZER_CLAUDE_API_KEY. The config's optimizer_openai_api_key_env
+#    selects which one the optimizer client actually reads.
+if (-not $env:OPTIMIZER_OPENAI_API_KEY -and -not $env:OPTIMIZER_CLAUDE_API_KEY) {
+    Write-Error "No optimizer key set. Need OPTIMIZER_OPENAI_API_KEY (DeepSeek) or OPTIMIZER_CLAUDE_API_KEY (Sonnet) in .env.local-pilot."
     exit 1
 }
 
-# 3. Ensure Ollama is up and the target model is pulled + warm
-$Model = if ($env:TARGET_DEPLOYMENT) { $env:TARGET_DEPLOYMENT } else { "qwen2.5:7b-instruct-q4_K_M" }
+# 3. Resolve config + interpreter, then derive the target from the CONFIG itself
+#    (single source of truth — the model is chosen by which config you run, not by env).
+$env:PYTHONUTF8 = "1"   # guards config loading on non-UTF8 consoles
+$Config  = if ($env:SKILLOPT_CONFIG)   { $env:SKILLOPT_CONFIG }   else { "configs/mcqa/local-pilot.yaml" }
+$OutRoot = if ($env:SKILLOPT_OUT_ROOT) { $env:SKILLOPT_OUT_ROOT } else { "outputs/mcqa_local_pilot" }
+$Py = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
+$Model = (& $Py -c "import sys; sys.path.insert(0,'.'); from skillopt.config import load_config, flatten_config, is_structured; c=load_config(sys.argv[1]); f=flatten_config(c) if is_structured(c) else c; print((f.get('target_model') or '').strip())" $Config).Trim()
+if (-not $Model) { Write-Error "Could not resolve model.target from $Config"; exit 1 }
+$Optim = (& $Py -c "import sys; sys.path.insert(0,'.'); from skillopt.config import load_config, flatten_config, is_structured; c=load_config(sys.argv[1]); f=flatten_config(c) if is_structured(c) else c; print((f.get('optimizer_model') or '').strip())" $Config).Trim()
+
+# 4. Ensure Ollama is up and the target (from the config) is pulled + warm
 $OllamaBase = if ($env:QWEN_CHAT_BASE_URL) { $env:QWEN_CHAT_BASE_URL } else { "http://localhost:11434/v1" }
 try {
     Invoke-RestMethod -Uri "$OllamaBase/models" -TimeoutSec 10 | Out-Null
@@ -42,12 +64,6 @@ if (-not ($tags -match [regex]::Escape($Model))) {
     Write-Host "[pilot] pulling $Model ..."
     & ollama pull $Model
 }
-
-# 4. Run training (PYTHONUTF8 guards config loading on non-UTF8 consoles)
-$env:PYTHONUTF8 = "1"
-$OutRoot = if ($env:SKILLOPT_OUT_ROOT) { $env:SKILLOPT_OUT_ROOT } else { "outputs/mcqa_local_pilot" }
-$Config = if ($env:SKILLOPT_CONFIG) { $env:SKILLOPT_CONFIG } else { "configs/mcqa/local-pilot.yaml" }
-$Py = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
 New-Item -ItemType Directory -Force -Path $OutRoot | Out-Null
 
 # 4a. Background GPU sampler -> $OutRoot/gpu.csv (5s interval)
@@ -70,15 +86,16 @@ if ($SmiCmd) {
     Write-Host "[pilot] nvidia-smi not found; skipping GPU sampler"
 }
 
-Write-Host "[pilot] optimizer=deepseek-chat  target=$Model  config=$Config  out_root=$OutRoot"
+Write-Host "[pilot] optimizer=$Optim  target=$Model  config=$Config  out_root=$OutRoot"
 $Start = Get-Date
 try {
-    # Optional per-seed split override (multi-seed runs reuse one config, vary the split dir).
-    if ($env:SKILLOPT_SPLIT_DIR) {
-        & $Py scripts/train.py --config $Config --split_dir $env:SKILLOPT_SPLIT_DIR --out_root $OutRoot
-    } else {
-        & $Py scripts/train.py --config $Config --out_root $OutRoot
-    }
+    # Target comes from the config (model.target); no --target_model override here so the
+    # config stays the single source of truth. SKILLOPT_SPLIT_DIR / SKILLOPT_SEED let one
+    # config drive a multi-seed matrix (these are data/loop knobs, not the model).
+    $trainArgs = @("scripts/train.py", "--config", $Config, "--out_root", $OutRoot)
+    if ($env:SKILLOPT_SPLIT_DIR) { $trainArgs += @("--split_dir", $env:SKILLOPT_SPLIT_DIR) }
+    if ($env:SKILLOPT_SEED)      { $trainArgs += @("--seed", $env:SKILLOPT_SEED) }
+    & $Py @trainArgs
 } finally {
     if ($GpuJob) { Stop-Job -Job $GpuJob -ErrorAction SilentlyContinue; Remove-Job -Job $GpuJob -Force -ErrorAction SilentlyContinue }
 }

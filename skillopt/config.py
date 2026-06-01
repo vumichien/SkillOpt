@@ -75,6 +75,7 @@ _FLATTEN_MAP: dict[str, str] = {
     "model.target_azure_openai_managed_identity_client_id": "target_azure_openai_managed_identity_client_id",
     "model.optimizer_openai_base_url": "optimizer_openai_base_url",
     "model.optimizer_openai_api_key": "optimizer_openai_api_key",
+    "model.optimizer_openai_api_key_env": "optimizer_openai_api_key_env",
     "model.qwen_chat_base_url": "qwen_chat_base_url",
     "model.qwen_chat_api_key": "qwen_chat_api_key",
     "model.qwen_chat_temperature": "qwen_chat_temperature",

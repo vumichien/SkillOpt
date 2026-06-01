@@ -1,0 +1,15 @@
+# SkillOpt mcqa local pilot — LogiQA variant (DeepSeek optimizer + local Ollama target).
+# Mirrors local-pilot.yaml but points at the LogiQA split for the headroom-regime
+# validation (low-baseline logical-reasoning MC where a better skill has room to help).
+# Default target is the gemma3:4b sweet spot; the launcher overrides model.target per
+# run via --target_model (TARGET_DEPLOYMENT), and loop.seed via SKILLOPT_SEED, so one
+# config drives the whole target × seed matrix. skill_init = arm-1 weak skill (inherited).
+_base_: local-pilot.yaml
+
+model:
+  target: gemma3:4b
+
+env:
+  split_dir: data/mcqa_logiqa_split   # 100 train / 300 val / 200 test (seed 42); per-seed override via launcher
+
+# Everything else (optimizer, loop hyperparams, weak init) inherited from local-pilot.yaml.

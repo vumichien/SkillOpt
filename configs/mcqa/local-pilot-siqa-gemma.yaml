@@ -1,0 +1,9 @@
+# SocialIQA on the gemma3:4b target (DeepSeek optimizer arm).
+# Cross-target cell: same SIQA split as local-pilot-siqa.yaml but swaps the target from
+# qwen2.5-7b to gemma3:4b, filling the gemma SIQA cell of the 2-target x 3-dataset matrix.
+_base_: local-pilot-siqa.yaml
+
+model:
+  target: gemma3:4b
+
+# SIQA split (data/mcqa_siqa_split) + all loop hyperparams / weak init inherited.

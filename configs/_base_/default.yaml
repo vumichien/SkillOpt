@@ -45,6 +45,7 @@ model:
   target_azure_openai_managed_identity_client_id: ""
   optimizer_openai_base_url: ""        # e.g. "https://api.deepseek.com/v1" - generic OpenAI-compatible optimizer (DeepSeek). Empty = Azure optimizer.
   optimizer_openai_api_key: ""         # fill locally or export OPTIMIZER_OPENAI_API_KEY; never commit
+  optimizer_openai_api_key_env: ""     # env var name holding the optimizer key (default OPTIMIZER_OPENAI_API_KEY); set OPTIMIZER_CLAUDE_API_KEY for the direct Anthropic endpoint
 
 train:
   num_epochs: 4

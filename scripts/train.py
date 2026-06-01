@@ -174,6 +174,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--target_azure_openai_managed_identity_client_id", type=str)
     p.add_argument("--optimizer_openai_base_url", type=str)
     p.add_argument("--optimizer_openai_api_key", type=str)
+    p.add_argument("--optimizer_openai_api_key_env", type=str)
     p.add_argument("--qwen_chat_base_url", type=str)
     p.add_argument("--qwen_chat_api_key", type=str)
     p.add_argument("--qwen_chat_temperature", type=float)
@@ -292,6 +293,7 @@ _LEGACY_TO_STRUCTURED: dict[str, str] = {
     "target_azure_openai_managed_identity_client_id": "model.target_azure_openai_managed_identity_client_id",
     "optimizer_openai_base_url": "model.optimizer_openai_base_url",
     "optimizer_openai_api_key": "model.optimizer_openai_api_key",
+    "optimizer_openai_api_key_env": "model.optimizer_openai_api_key_env",
     "qwen_chat_base_url": "model.qwen_chat_base_url",
     "qwen_chat_api_key": "model.qwen_chat_api_key",
     "qwen_chat_temperature": "model.qwen_chat_temperature",

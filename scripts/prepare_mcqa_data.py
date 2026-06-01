@@ -34,15 +34,18 @@ import sys
 _SUPPORTED = {
     "commonsense_qa": "tau/commonsense_qa",
     "social_i_qa": "allenai/social_i_qa",
+    "logiqa": "lucasmccabe/logiqa",
 }
 _LICENSES = {
     "commonsense_qa": "MIT",
     "social_i_qa": "CC-BY-4.0",
+    "logiqa": "CC-BY-NC-SA-4.0",
 }
 # allenai/social_i_qa ships a loader script (unsupported by modern `datasets`);
 # the HF auto-conversion bot publishes a parquet branch we load instead.
 _REVISIONS = {
     "social_i_qa": "refs/convert/parquet",
+    "logiqa": "refs/convert/parquet",
 }
 
 
@@ -93,6 +96,35 @@ def _convert_siqa_row(row: dict, index: int) -> dict | None:
     }
 
 
+# LogiQA: 4-option logical-reasoning MC; correct_option is a 0-indexed int.
+_LOGIQA_LETTERS = ("A", "B", "C", "D")
+
+
+def _convert_logiqa_row(row: dict, index: int) -> dict | None:
+    """Map one LogiQA row to the mcqa schema. None if unusable.
+
+    LogiQA rows have a ``context`` passage, a ``query`` question, four string
+    ``options`` and a 0-indexed integer ``correct_option``.
+    """
+    context = str(row.get("context") or "").strip()
+    query = str(row.get("query") or "").strip()
+    options = [str(o).strip() for o in (row.get("options") or [])]
+    gold_idx = row.get("correct_option")
+    if not query or len(options) != 4 or not all(options):
+        return None
+    if not isinstance(gold_idx, int) or not 0 <= gold_idx < 4:
+        return None  # drop rows with out-of-range / non-integer gold
+    return {
+        "id": f"logiqa-{index}",
+        "question": (context + "\n" + query).strip() if context else query,
+        "choices": [
+            {"label": letter, "text": text}
+            for letter, text in zip(_LOGIQA_LETTERS, options)
+        ],
+        "answers": [_LOGIQA_LETTERS[gold_idx]],
+    }
+
+
 def _build_pool(dataset_key: str) -> list[dict]:
     try:
         from datasets import load_dataset
@@ -115,6 +147,8 @@ def _build_pool(dataset_key: str) -> list[dict]:
         for row in ds[split]:
             if dataset_key == "social_i_qa":
                 converted = _convert_siqa_row(row, idx)
+            elif dataset_key == "logiqa":
+                converted = _convert_logiqa_row(row, idx)
             else:
                 converted = _convert_csqa_row(row)
             idx += 1

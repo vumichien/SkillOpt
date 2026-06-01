@@ -1,0 +1,9 @@
+# CommonsenseQA on the gemma3:4b target (DeepSeek optimizer arm).
+# Cross-target cell: same CSQA split as local-pilot.yaml but swaps the target from
+# qwen2.5-7b to gemma3:4b, filling the gemma CSQA cell of the 2-target x 3-dataset matrix.
+_base_: local-pilot.yaml
+
+model:
+  target: gemma3:4b
+
+# CSQA split (data/mcqa_csqa_split_v2) + all loop hyperparams / weak init inherited.

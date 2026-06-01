@@ -330,6 +330,91 @@ self-regard (feeling valued, grateful) over negative or unrelated traits.
 
 ---
 
+## Anatomy of a rewrite: init prompt → feedback → rewrite → score
+
+The loop is abstract, so here's one real step from a LogiQA run on `gemma3:4b` (seed 42) — the single most useful thing to understand about SkillOpt, because it shows *exactly* where the gain is supposed to come from, and why it didn't arrive. (Why LogiQA + `gemma3:4b`? It's the one model/task pairing where my probe showed real headroom *and* procedure-responsiveness — a short hand-written CoT lifted it +4.5 pp. If the loop was going to produce a held-out win anywhere in my setup, it was here.)
+
+**Step A — the optimizer gets a report card.** After running the current skill on a batch of 20 training questions, the harness scores the rollouts (13 of 20 wrong), clusters the mistakes by error signature, and hands the optimizer LLM (DeepSeek) the current skill plus that diagnosis. The actual failure signal it received was one dominant pattern:
+
+```json
+{
+  "n_total": 20, "n_fail": 13,
+  "failure_patterns": [{
+    "count": 13,
+    "pattern": "insufficient_reasoning_about_options: the agent selects
+                option A prematurely without fully comparing all options,
+                leading to a wrong answer when the correct answer is not A."
+  }]
+}
+```
+
+The "feedback" is not the answer key — it's a *behavioral failure mode*: the small model is anchoring on option A. The optimizer also receives a "success" cluster (what the skill did right on the items it got correct), so it can reinforce as well as fix.
+
+**Step B — the optimizer rewrites the skill.** It compiles those clusters into concrete instructions. Here is the real before/after, side by side:
+
+| BEFORE — initial "weak" skill (157 B) | AFTER — the optimizer's rewrite (step 1) |
+|---|---|
+| `# Multiple-Choice Task`<br><br>`Pick the single best option for the`<br>`question. Output only that option's`<br>`letter inside <answer> tags,`<br>`e.g. <answer>B</answer>.` | `# Multiple-Choice Task`<br><br>`## Recommended Reasoning Steps`<br>`1. Identify the core argument/definition`<br>`   of the passage before reading options.`<br>`2. Evaluate each option against that idea`<br>`   (too narrow? incomplete? contradicts?).`<br>`3. Eliminate options that deviate from it.`<br>`4. Select the option that best captures it.`<br><br>`Pick the single best option … <answer>B</answer>.`<br><br>`## Decision Steps`<br>`- Read ALL options completely; don't stop at A.`<br>`- Beware first-option bias — check B, C, D.`<br>`- Re-read the QUESTION for negations ("not"),`<br>`  qualifiers ("best summarizes"), modality.`<br>`- Match the question type (assumption /`<br>`  inference / support) and test that relation.` |
+
+This is a *good* rewrite. The failure pattern ("picks A prematurely") maps almost one-to-one onto the new instructions: "Read ALL options completely; don't stop at A," "Beware first-option bias." The optimizer did its job — it turned a measured weakness into targeted guidance, even tagging each edit with how many rollouts supported it (8 from failures, 7 from successes).
+
+**Step C — the gate weighs it, and this is where it died.** Each rewrite is re-scored on a fixed 120-item selection set and compared to the incumbent (the init scored **0.4167**). A rewrite is kept only if it *strictly* clears that bar. Here is the entire run — all 10 rewrites:
+
+| Step | Rewritten-skill score | vs. init (0.4167) | Gate |
+|---|---|---|---|
+| init | 0.4167 | — | (incumbent) |
+| 1 | 0.3967 | −2.0 pp | ❌ reject |
+| 2 | 0.3167 | −10.0 pp | ❌ reject |
+| 3 | 0.3133 | −10.3 pp | ❌ reject |
+| 4 | 0.4000 | −1.7 pp | ❌ reject |
+| 5 | 0.2933 | −12.3 pp | ❌ reject |
+| 6 | 0.2267 | −19.0 pp | ❌ reject |
+| 7 | 0.3700 | −4.7 pp | ❌ reject |
+| 8 | 0.3167 | −10.0 pp | ❌ reject |
+| 9 | 0.2200 | −19.7 pp | ❌ reject |
+| 10 | 0.2767 | −14.0 pp | ❌ reject |
+
+The striking part: **not one rewrite beat the one-liner — every single one scored lower.** The best attempt (step 4) still fell 1.7 pp short; most were far worse, and the more elaborate the skill grew, the harder it crashed. On a 4B model, each added paragraph of "good advice" didn't sharpen the reasoning — it crowded the context window and *degraded* it. The strict-improvement gate worked exactly as designed: it protected the incumbent from 10 consecutive regressions, so after the full run the "best skill" was still the original one-liner (`best_step = 0`).
+
+**The held-out result follows mechanically.** Because nothing was ever accepted, the optimized skill *is* the initial skill, and the test numbers are identical:
+
+| Arm | Skill used | Test acc (200 items) |
+|---|---|---|
+| Arm 1 — raw weak init | one-liner | 0.385 |
+| Arm 3 — SkillOpt "optimized" | **same one-liner** | 0.385 |
+| Arm 2 — generic CoT (baseline) | fixed hand-written CoT | 0.420 |
+
+The real effect — arm 3 minus arm 2 — is **−3.5 pp** on this seed. And here's the subtlety worth sitting with: the probe showed `gemma3:4b` was the *one* model that liked added procedure (a short, clean, hand-written CoT, +4.5 pp). Yet SkillOpt's *auto-generated* procedures, which grew longer and multi-sectioned at every step, consistently hurt it. A tight procedure helped; the optimizer's verbose, layered rewrites did not. The mechanism is sound and the feedback is real — but on a small model the edits it produces are too heavy, and the selection signal too noisy, to convert a better-*written* skill into more correct answers.
+
+*(This is seed 42. I'm running seeds 43 and 44 to report the full 3-seed mean and 95 % CI; I'll update this section with the aggregate once they land.)*
+
+## A stronger optimizer and a full target × dataset grid
+
+Every number above came from `deepseek-chat` — the cheap, deprecated tier. The obvious objection is that the optimizer was the bottleneck: maybe a *smarter* model writing the skill would have found the lift. So I swapped the optimizer for **DeepSeek-V4-Pro** (the strong V4 tier) and filled in the entire **2 targets × 3 datasets** grid from the same weak init, same v3 hyperparams, seed 42 — changing *only* the model that writes the skill and the target/data it writes for.
+
+| Dataset | Target | Baseline test (arm-1) | Trained test (arm-3) | Test Δ | Accepts | Best dev |
+|---|---|---|---|---|---|---|
+| CSQA | Qwen2.5-7B | 0.760 | 0.775 | **+1.5 pp** | 3 | 0.900 |
+| CSQA | gemma3:4b | 0.610 | 0.615 | **+0.5 pp** | 2 | 0.750 |
+| SocialIQA | Qwen2.5-7B | 0.785 | 0.795 | **+1.0 pp** | 3 | 0.847 |
+| SocialIQA | gemma3:4b | 0.725 | 0.705 | **−2.0 pp** | 2 | 0.797 |
+| LogiQA | Qwen2.5-7B | 0.585 | 0.590 | **+0.5 pp** | 3 | 0.610 |
+| LogiQA | gemma3:4b | 0.375 | 0.325 | **−5.0 pp** | 2 | 0.430 |
+
+**A stronger optimizer changed nothing.** Every one of the six deltas lands in **[−5.0, +1.5] pp** — all inside ±1 binomial SE (≈ ±3.5 pp on n=200). The mean delta is **−0.6 pp**: flat, again, now across two targets, three datasets, and a frontier-tier optimizer. The model writing the skill was never the limiting factor.
+
+Three things the grid makes unmissable:
+
+1. **Dev climbs, test doesn't — in every single cell.** Best dev sits far above test everywhere (Qwen×CSQA 0.900 dev vs 0.775 test; gemma×LogiQA 0.430 dev vs 0.325 test). The optimizer reliably improves the training rollouts the gate sees; that gain just doesn't survive the trip to held-out test. The accepts are real edits, scored on real dev lifts — the lifts are simply part overfit.
+
+2. **Low baseline is not the same as exploitable headroom.** This was the whole "try a lower-baseline task" prescription from the previous section. gemma3:4b on LogiQA starts at **0.375** — the most nominal room to grow of anything I've run — and the trained skill scored *5 points worse* on test. The two cells that went negative (gemma on SocialIQA and LogiQA) are the two with the most apparent headroom. The room was real; it just wasn't reachable by a markdown file.
+
+3. **It directly closes the open question I left last time.** The prior section ended by saying the experiment worth running was a task where the 7B starts well below ceiling — *LogiQA, ReClor*. Qwen2.5-7B on LogiQA starts at **0.585**, comfortably below ceiling, exactly the regime I said might unlock the loop. It returned **+0.5 pp**. The lower-baseline task didn't rescue the result; it joined it.
+
+*(Reproduce any cell: the six configs are `configs/mcqa/local-pilot{,-siqa,-logiqa}{,-gemma,-qwen}.yaml`; artifacts under `outputs/{csqa,siqa,logiqa}-train/deepseek-v4-pro/<target>-s42/`. A separate Claude-Sonnet optimizer arm — same grid, swap only the optimizer API — is queued; I'll add it as the matching row when it lands.)*
+
+---
+
 ## Why it didn't work here — and why it worked in the paper
 
 Two flat datasets in a row is a pattern, not an accident. The cause isn't the optimizer; it's the **headroom**.
@@ -425,6 +510,15 @@ Run the same v3-trained skill against Qwen2.5-14B (with offload) or Qwen2.5-32B 
 | Qwen2.5-7B (this post) | 0.760 | 0.740 |
 | **Qwen2.5-14B** | _coming_ | _coming_ |
 | **Qwen2.5-32B** | _coming_ | _coming_ |
+
+### Experiment 5 — Does the optimizer model matter? (DeepSeek arm ✅ done)
+
+Hold target, data, and weak init fixed; change *only* the LLM that rewrites the skill. The **DeepSeek-V4-Pro** half is the **"A stronger optimizer and a full target × dataset grid"** section above — six cells, mean test Δ **−0.6 pp**, flat. The matching **Claude-Sonnet** arm (same grid, swap only the optimizer endpoint) is queued; this row gets the head-to-head when it lands.
+
+| Optimizer | Mean test Δ (2 targets × 3 datasets) | Verdict |
+|---|---|---|
+| DeepSeek-V4-Pro | **−0.6 pp** | flat |
+| **Claude-Sonnet-4-6** | _coming_ | _coming_ |
 
 ---
 

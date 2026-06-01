@@ -629,9 +629,14 @@ class ReflACTTrainer:
             effort=cfg.get("claude_code_exec_effort", cfg.get("reasoning_effort", "medium")),
             max_thinking_tokens=cfg.get("claude_code_exec_max_thinking_tokens", 16384),
         )
+        # Optimizer API key: a config may name which env var holds it (default
+        # OPTIMIZER_OPENAI_API_KEY for DeepSeek; OPTIMIZER_CLAUDE_API_KEY for the direct
+        # Anthropic endpoint), so two optimizer arms can use distinct keys without clobbering.
+        _optimizer_key_env = cfg.get("optimizer_openai_api_key_env") or "OPTIMIZER_OPENAI_API_KEY"
+        _optimizer_key = cfg.get("optimizer_openai_api_key") or os.environ.get(_optimizer_key_env) or None
         configure_optimizer_openai(
             base_url=cfg.get("optimizer_openai_base_url") or None,
-            api_key=cfg.get("optimizer_openai_api_key") or None,
+            api_key=_optimizer_key,
         )
         configure_qwen_chat(
             base_url=cfg.get("qwen_chat_base_url") or None,

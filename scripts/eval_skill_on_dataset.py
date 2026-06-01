@@ -79,9 +79,15 @@ def main() -> int:
     p.add_argument("--split", default="test", choices=["train", "val", "test"])
     p.add_argument("--out-dir", required=True, help="where to write summary.json + results.jsonl")
     p.add_argument("--workers", type=int, default=8)
+    p.add_argument("--target", default="", help="target deployment tag; overrides "
+                   "TARGET_DEPLOYMENT from .env (the .env loader otherwise wins over the shell)")
     args = p.parse_args()
 
     _load_env_file(os.path.join(_PROJECT_ROOT, ".env.local-pilot"))
+    # An explicit --target must win over the .env file value (the loader forces
+    # file>shell for temp pinning, which would otherwise pin every run to one model).
+    if args.target.strip():
+        os.environ["TARGET_DEPLOYMENT"] = args.target.strip()
     _configure_backends()
 
     from skillopt.envs.mcqa.batch_runner import run_batch
@@ -109,6 +115,9 @@ def main() -> int:
         "skill": args.skill,
         "split_dir": args.split_dir,
         "split": args.split,
+        # record which target actually produced these numbers, so a multi-model
+        # results table is self-documenting and an env mix-up can't go unnoticed.
+        "target": os.environ.get("TARGET_DEPLOYMENT", "").strip(),
         "acc": acc,
         "correct": correct,
         "total": total,
