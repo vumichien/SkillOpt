@@ -54,6 +54,16 @@ def _register_builtins() -> None:
     except ImportError:
         pass
     try:
+        from skillopt.envs.mbpp.adapter import MbppAdapter
+        _ENV_REGISTRY["mbpp"] = MbppAdapter
+    except ImportError:
+        pass
+    try:
+        from skillopt.envs.bizsql.adapter import BizsqlAdapter
+        _ENV_REGISTRY["bizsql"] = BizsqlAdapter
+    except ImportError:
+        pass
+    try:
         from skillopt.envs.livemathematicianbench.adapter import LiveMathematicianBenchAdapter
         _ENV_REGISTRY["livemathematicianbench"] = LiveMathematicianBenchAdapter
     except ImportError:

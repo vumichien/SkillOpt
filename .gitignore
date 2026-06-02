@@ -10,6 +10,18 @@ outputs/
 logs/
 external/
 
+# BizSQL self-generated track: data/ is ignored globally, but the schema DDL and
+# the blind (question, gold_sql) generation checkpoint are source-of-truth and
+# MUST be committed for reproducibility (seed_bizsql_db.py reads schema.sql; the
+# split step replays raw_pairs.jsonl without re-calling any LLM). The seeded
+# .sqlite and the split dirs stay ignored — regenerated on demand.
+!data/
+data/*
+!data/bizsql/
+data/bizsql/*
+!data/bizsql/schema.sql
+!data/bizsql/raw_pairs.jsonl
+
 /BabyVision/
 /MMRB/
 /SpreadsheetBench/
