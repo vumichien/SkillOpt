@@ -107,7 +107,10 @@ def _run_arm_b(items: list[dict], strong_model: str) -> tuple[float, int]:
     correct = 0
     for i, it in enumerate(items):
         try:
-            resp, _ = chat_optimizer(system, _build_user(it), max_completion_tokens=512, retries=3)
+            # Generous budget: the strong model is a reasoning model that spends
+            # completion tokens on hidden reasoning before emitting content; a tight
+            # cap truncates the SQL (empty/partial) and understates the true ceiling.
+            resp, _ = chat_optimizer(system, _build_user(it), max_completion_tokens=4096, retries=3)
         except Exception as e:  # noqa: BLE001
             print(f"  [armB] {it.get('id')} call failed: {e}", file=sys.stderr)
             continue

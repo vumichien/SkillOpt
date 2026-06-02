@@ -38,7 +38,10 @@ _LITERALS_AND_COMMENTS = re.compile(
     r'|"(?:[^"]|"")*"',    # double-quoted identifier
     re.DOTALL,
 )
-_FLOAT_DP = 6
+# Compare numeric cells at cent precision. Business gold SQL inconsistently wraps
+# aggregates in ROUND(x,2); a correct unrounded SUM/AVG must not be scored wrong
+# for trailing decimals the question never asked about.
+_FLOAT_DP = 2
 _PROGRESS_OPS = 1000  # progress handler fires every N VM ops
 
 

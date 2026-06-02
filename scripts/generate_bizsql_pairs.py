@@ -119,7 +119,12 @@ def main() -> int:
     p.add_argument("--target-count", type=int, default=450, help="approx total pairs to accumulate")
     p.add_argument("--per-call", type=int, default=8, help="pairs requested per LLM call")
     p.add_argument("--out", default=_RAW)
+    p.add_argument("--difficulties", default="easy,medium,hard",
+                   help="comma list; restrict generation to these bands (easy saturates fast)")
     args = p.parse_args()
+
+    allowed = {d.strip() for d in args.difficulties.split(",") if d.strip()}
+    archetypes = [a for a in _ARCHETYPES if a[1] in allowed] or _ARCHETYPES
 
     _load_env_file(os.path.join(_PROJECT_ROOT, ".env.local-pilot"))
     model = _configure_optimizer()
@@ -140,12 +145,12 @@ def main() -> int:
     with open(args.out, "a", encoding="utf-8") as out:
         round_i = 0
         while existing + written < args.target_count:
-            archetype, difficulty, hint = _ARCHETYPES[round_i % len(_ARCHETYPES)]
+            archetype, difficulty, hint = archetypes[round_i % len(archetypes)]
             round_i += 1
             try:
                 text, _ = chat_optimizer(
                     system, _user_prompt(archetype, difficulty, hint, args.per_call),
-                    max_completion_tokens=2048, retries=3,
+                    max_completion_tokens=4096, retries=3,
                 )
             except Exception as e:  # noqa: BLE001
                 print(f"[gen] call failed ({archetype}/{difficulty}): {e}", file=sys.stderr)

@@ -1,7 +1,7 @@
 ---
 title: "Prove SkillOpt Works: MBPP Code-Gen + Self-Generated Business Text-to-SQL on Local 7B"
 description: "Reproduce the paper's winning procedure-bound family at small scale on TWO tasks — a public benchmark (MBPP code-gen) and a Claude-Code-generated business Text-to-SQL task — to produce real held-out lifts on a local qwen2.5:7b-instruct target with a fixed deepseek-v4-pro optimizer; identical hyperparams so flat→win is attributable to task family only; write up as ONE Medium article with deep per-step traces for both."
-status: pending
+status: complete
 priority: P2
 branch: "main"
 tags: [skillopt, mbpp, codegen, text-to-sql, business-data, local-llm, article]
@@ -46,16 +46,16 @@ contrast scientifically clean — the lift is attributable to task family, not c
 |-------|------|--------|
 | 1 | [MBPP Data Prep](./phase-01-mbpp-data-prep.md) | ✅ Done — `data/mbpp_split_s42` (100/100/200), self-check PASS, pool=969 |
 | 2 | [MBPP Env and Sandbox Evaluator](./phase-02-mbpp-env-and-sandbox-evaluator.md) | ✅ Done — env built + registered; 26 evaluator tests pass |
-| 3 | [Headroom Probe Gate](./phase-03-headroom-probe-gate.md) | 🟦 `scripts/probe_mbpp_headroom.py` built; run needs Ollama 7B + human gate |
+| 3 | [Headroom Probe Gate](./phase-03-headroom-probe-gate.md) | ✅ Done — PASS (baseline 0.66, ~16–20pp procedural hand-labeled) |
 | 4 | [Config Runner and Smoke Test](./phase-04-config-runner-and-smoke-test.md) | ✅ Done — config (hyperparam parity verified) + runner |
-| 5 | [Seed-42 Pilot and 3-Arm Eval](./phase-05-seed-42-pilot-and-3-arm-eval.md) | ⬜ Pending — GPU training run (after Ph3 gate) |
-| 6 | [Three-Seed Scale and Aggregate](./phase-06-three-seed-scale-and-aggregate.md) | ⬜ Pending — GPU (after Ph5 gate) |
+| 5 | [Seed-42 Pilot and 3-Arm Eval](./phase-05-seed-42-pilot-and-3-arm-eval.md) | ✅ Done — seed-42 test 0.65→0.62 (−3pp), dev +9 overfit; scale-gate FAIL (flat) |
+| 6 | [Three-Seed Scale and Aggregate](./phase-06-three-seed-scale-and-aggregate.md) | ⬜ Not run — gated off by Ph5 FAIL (MBPP flat; kept as the heterogeneous-procedural control) |
 | 7 | [Standalone Article](./phase-07-standalone-article.md) — **superseded by Phase 12** | — Superseded |
-| 8 | [BizSQL Schema and Claude-Code Data Gen](./phase-08-bizsql-schema-and-claude-code-data-gen.md) | 🟦 schema + seeder + prepare built & validated; full ~400-pair generation needs DeepSeek API |
-| 9 | [BizSQL Env and SQL Execution Evaluator](./phase-09-bizsql-env-and-sql-execution-evaluator.md) | ✅ Done — env + config + runner; 18 evaluator tests pass |
-| 10 | [BizSQL Headroom Probe Gate](./phase-10-bizsql-headroom-probe-gate.md) | 🟦 `scripts/probe_bizsql_headroom.py` (Arm A+B) built; run needs GPU + API + human gate |
-| 11 | [BizSQL Pilot and Three-Seed Scale](./phase-11-bizsql-pilot-and-three-seed-scale.md) | ⬜ Pending — GPU (after Ph10 gate) |
-| 12 | [Combined Two-Experiment Article](./phase-12-combined-two-experiment-article.md) | ⬜ Pending — needs real numbers from Ph6 + Ph11 |
+| 8 | [BizSQL Schema and Claude-Code Data Gen](./phase-08-bizsql-schema-and-claude-code-data-gen.md) | ✅ Done — 420 authored, execution-validated pairs (`author_bizsql_pairs.py`) |
+| 9 | [BizSQL Env and SQL Execution Evaluator](./phase-09-bizsql-env-and-sql-execution-evaluator.md) | ✅ Done — env + config + runner; 18 evaluator tests pass (eval float-dp fixed 6→2) |
+| 10 | [BizSQL Headroom Probe Gate](./phase-10-bizsql-headroom-probe-gate.md) | ✅ Done — PASS (Arm A 0.82, Arm B 1.00, ~18pp ~all procedural) after 2 bug fixes + data redo |
+| 11 | [BizSQL Pilot and Three-Seed Scale](./phase-11-bizsql-pilot-and-three-seed-scale.md) | ✅ Done — 3-seed mean **+8.2pp** (+10.5/+7.5/+6.5), all PASS, generalizes |
+| 12 | [Combined Two-Experiment Article](./phase-12-combined-two-experiment-article.md) | ✅ Done — `docs/articles/medium-skillopt-mbpp-codegen-local.md` |
 
 > **Build milestone (2026-06-02):** all deterministic machinery for both tracks is implemented, ruff-clean, and unit-tested (44 tests). What remains is *execution*: GPU training (Ph5/6/11), the live-7B + strong-model headroom probes (Ph3/10), the full DeepSeek bizSQL pair generation (Ph8 scale-up), the human procedural-vs-capability gate labels, and the article (Ph12). See the build report under `plans/reports/`.
 
