@@ -1,7 +1,7 @@
 ---
 title: "Prove SkillOpt Works: MBPP Code-Gen + Self-Generated Business Text-to-SQL on Local 7B"
 description: "Reproduce the paper's winning procedure-bound family at small scale on TWO tasks — a public benchmark (MBPP code-gen) and a Claude-Code-generated business Text-to-SQL task — to produce real held-out lifts on a local qwen2.5:7b-instruct target with a fixed deepseek-v4-pro optimizer; identical hyperparams so flat→win is attributable to task family only; write up as ONE Medium article with deep per-step traces for both."
-status: complete
+status: in-progress
 priority: P2
 branch: "main"
 tags: [skillopt, mbpp, codegen, text-to-sql, business-data, local-llm, article]
@@ -56,6 +56,7 @@ contrast scientifically clean — the lift is attributable to task family, not c
 | 10 | [BizSQL Headroom Probe Gate](./phase-10-bizsql-headroom-probe-gate.md) | ✅ Done — PASS (Arm A 0.82, Arm B 1.00, ~18pp ~all procedural) after 2 bug fixes + data redo |
 | 11 | [BizSQL Pilot and Three-Seed Scale](./phase-11-bizsql-pilot-and-three-seed-scale.md) | ✅ Done — 3-seed mean **+8.2pp** (+10.5/+7.5/+6.5), all PASS, generalizes |
 | 12 | [Combined Two-Experiment Article](./phase-12-combined-two-experiment-article.md) | ✅ Done — `docs/articles/medium-skillopt-mbpp-codegen-local.md` |
+| 13 | [Second Local Target Capability-Sweep](./phase-13-gemma-e4b-capability-sweep.md) | ✅ Done — 2nd target **granite-code 8B** (planned e4b killed by Gemma-3n renderer bug). MBPP **+0.00pp FLAT** (replicates qwen flat on 0.44 base → family fact, not model artifact); bizSQL **+42.5pp WIN** (0.215→0.64, z≈9.5; replicates qwen +8.2pp, larger at low base). Single-seed arm; bizSQL magnitude flagged for 3-seed |
 
 > **Build milestone (2026-06-02):** all deterministic machinery for both tracks is implemented, ruff-clean, and unit-tested (44 tests). What remains is *execution*: GPU training (Ph5/6/11), the live-7B + strong-model headroom probes (Ph3/10), the full DeepSeek bizSQL pair generation (Ph8 scale-up), the human procedural-vs-capability gate labels, and the article (Ph12). See the build report under `plans/reports/`.
 
@@ -90,7 +91,7 @@ can run in either order. Phase 12 depends on both (Phase 6 + Phase 11).
 | Optimizer | `deepseek-v4-pro` (fixed; direct DeepSeek API) |
 | Hyperparams | identical to MC v3 (bs=20, 2 epochs→10 edits, lr=4 cosine, temp=0 gate, strict-improve) — IDENTICAL across MC/MBPP/bizSQL |
 | Rigor | seed-42 pilot → 3 seeds (43/44) only if Δ beats ±1 SE (~±3.5 pp @ n=200) with ≥1 accept |
-| Model choice | NOT a lever — same target both tracks; do NOT chase the whichllm general leaderboard (general scores ≠ SQL accuracy; 14B/27B spill 10 GB VRAM) |
+| Model choice | NOT a lever — same target both tracks; do NOT chase the whichllm general leaderboard (general scores ≠ SQL accuracy; 14B/27B spill 10 GB VRAM). **Phase 13 (2026-06-03) MEASURED this** with a 2nd VRAM-safe local target (`granite-code:8b-instruct-q4_K_M`; planned e4b killed by Gemma-3n renderer bug). Verdict CONFIRMED: family — not model — is the lever. MBPP flat on both targets (qwen 0.65 / granite 0.44 base); bizSQL wins on both (qwen +8.2pp / granite +42.5pp). |
 
 ## Gates (do not skip)
 

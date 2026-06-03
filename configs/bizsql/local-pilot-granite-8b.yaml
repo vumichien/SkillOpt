@@ -1,0 +1,24 @@
+_base_: local-pilot.yaml
+
+# Second local target (capability sweep). IDENTICAL to local-pilot.yaml except
+# model.target is swapped qwen2.5:7b -> granite-code:8b-instruct-q4_K_M, and
+# env.workers is lowered 8 -> 4 (concurrency hedge for the 10 GB shared card;
+# rollouts are temp-0 deterministic, so workers affects speed/VRAM only, NOT the
+# trained skill or final metrics). Everything else (optimizer, hyperparams,
+# _s42 splits, weak-init skill, temp-0, n=200 test) is inherited unchanged, so the
+# only result-affecting varied factor is target capability. Single-seed (seed 42)
+# capability arm — NOT equal-rigor to the 3-seed qwen runs.
+#
+# Why granite-code (not the first-choice Gemma-3n e2b/e4b): the Gemma-3n "elastic"
+# builds trip an Ollama gemma4 renderer bug — they generate tokens that decode to
+# empty content for many inputs (and e4b ran at ~6 tok/s). granite-code 8B (IBM,
+# dense, q4_K_M) smoke-tested clean (real SQL, ~40 tok/s, 0 empties) on this harness.
+# Probe exec-acc = 0.26 (well below the 0.90 ceiling -> clears the headroom gate);
+# 32% of failures are schema-name + SQLite-dialect conventions (e.g. no such column,
+# YEAR() vs strftime) — the shared homogeneous-procedural conventions SkillOpt teaches.
+
+model:
+  target: "granite-code:8b-instruct-q4_K_M"
+
+env:
+  workers: 4

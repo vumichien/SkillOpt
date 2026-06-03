@@ -314,6 +314,19 @@ I started this thinking the axis was **procedure vs. knowledge.** MBPP — proce
 
 This also re-confirms, from the other direction, the prior post's finding that **the optimizer model is not the lever.** A frontier optimizer can't manufacture a shared fix set where none exists (MBPP, MC). A cheap one finds it effortlessly where it does exist (bizSQL). The task's structure decides the outcome; the optimizer just reads it.
 
+### Is it the *target* model, then? No — I swapped it too
+
+A fair objection: every number above is on one weak 7B. Maybe "MBPP is flat" just means *qwen* can't be taught Python naming, and a different model would lift. So I changed the one thing the thesis hangs on — the **target** — and re-ran both tasks identically. (The planned model, Gemma-3n `e4b`, turned out to be unusable: Ollama's renderer emits empty completions for it on most prompts, a reminder that "looks fine in the model card" and "works in your harness" are different claims — always smoke-test the exact path. The landing spot was IBM's dense `granite-code:8b-instruct-q4_K_M`.)
+
+granite starts from a very different place than qwen — MBPP baseline 0.44 vs 0.65, bizSQL 0.215 vs 0.88 — so if capability were the hidden variable, the verdicts should move. They didn't:
+
+| Task | qwen2.5 7B (base → Δ) | granite-code 8B (base → Δ) | Verdict |
+|---|---|---|---|
+| MBPP | 0.65 → **−3 pp** | 0.44 → **+0.0 pp** | flat on both |
+| bizSQL | 0.88 → **+8.2 pp** (3-seed) | 0.215 → **+42.5 pp** (z≈9.5) | wins on both |
+
+Same story, 21 points of base-capability apart on MBPP (far more on bizSQL). MBPP's optimizer *again* found a real convention (function-name/arity discipline) that moved the dev gate +5 pp — and *again* it died on held-out, because there's no shared procedure to carry. bizSQL *again* learned a handful of schema-and-dialect house rules that every test query reuses, so it transferred — and the lift was **bigger at the lower base**: the conventions a strong model already knows are exactly the headroom a weaker one gains. (The granite run is a single seed, so I trust its *direction* far more than its precise +42.5; a 3-seed confirmation is the honest next step before quoting that number.) The lever is the task family, on two models now, not the model.
+
 The practical upshot for anyone with a local model and their own data: **SkillOpt is worth running exactly when your task has house rules** — domain conventions, a dialect, a schema's quirks, an output format — that the base model keeps getting wrong in the *same* ways. Business SQL, internal API call formats, report templating, log parsing: these are homogeneous-procedure tasks, and this is the regime where a trained markdown file earns its keep. If your failures are all different from each other, save the GPU time.
 
 ---
