@@ -79,8 +79,9 @@ tracks only)** → **Stage 4 interpret + feed article**.
 - Create: `configs/bizsql/local-pilot-gemma-e4b.yaml` — same pattern over `bizsql/local-pilot.yaml`.
 - Read (no edits): `scripts/probe_mbpp_headroom.py`, `scripts/probe_bizsql_headroom.py`,
   `scripts/run_mbpp_pilot.ps1`, `scripts/run_bizsql_pilot.ps1`, `skillopt/model/qwen_backend.py`.
-- Modify (Stage 4, only if results warrant): `docs/articles/medium-skillopt-mbpp-codegen-local.md` (add the
-  second-target datapoint to the cross-family section); `plan.md` (mark Phase 13 status).
+- Modify (Stage 4, only if results warrant): `docs/articles/medium-skillopt-when-prompt-training-works.md`
+  (consolidated single final post — carries the second-target datapoint in its cross-family + "swap the model"
+  sections); `plan.md` (mark Phase 13 status).
 - Outputs (qwen-safe, new segments): `outputs/{mbpp,bizsql}_probe_gemma_e4b/`,
   `outputs/{mbpp,bizsql}-train/deepseek-v4-pro/gemma-e4b-s42/`.
 

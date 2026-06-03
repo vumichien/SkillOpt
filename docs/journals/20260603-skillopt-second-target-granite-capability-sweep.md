@@ -49,4 +49,4 @@ models burn the fixed 1024-token budget on reasoning that gets stripped → empt
 - Report: `plans/260601-2126-skillopt-mbpp-codegen-proof/reports/phase13-second-target-granite-results.md`
 - Configs: `configs/{mbpp,bizsql}/local-pilot-granite-8b.yaml` (override only target + workers)
 - Runs (gitignored): `outputs/{mbpp,bizsql}-train/deepseek-v4-pro/granite8b-s42/`
-- Article second-target subsection: `docs/articles/medium-skillopt-mbpp-codegen-local.md`
+- Article (consolidated single final post): `docs/articles/medium-skillopt-when-prompt-training-works.md`

@@ -24,8 +24,9 @@ becomes Experiment A here.
   explicitly addressed for Exp B (objective verifier + pre-registered gate + blind gold).
 
 ## Architecture (article structure)
-- File: `docs/articles/medium-skillopt-mbpp-codegen-local.md` (the Phase-7 target file, now two-experiment;
-  links to but does not depend on the CSQA post). Update `mkdocs.yml`/nav if articles are listed.
+- File: `docs/articles/medium-skillopt-when-prompt-training-works.md` (later consolidated single final post —
+  merges this two-experiment article + the CSQA post + the granite second-target arc; old per-experiment article
+  files removed). Update `mkdocs.yml`/nav if articles are listed.
 - Sections:
   1. **Hook** — recap: MC went flat across 3 datasets × 2 targets × 2 optimizers; the diagnosis (procedure-bound
      tasks should lift). Two tests: a public benchmark and "but does it work on MY business data?"
@@ -55,7 +56,7 @@ becomes Experiment A here.
      flagged stretch; HumanEval transfer stretch).
 
 ## Related Code Files
-- Create/replace: `docs/articles/medium-skillopt-mbpp-codegen-local.md` (two-experiment article).
+- Create/replace: `docs/articles/medium-skillopt-when-prompt-training-works.md` (consolidated single final post).
 - Modify: `mkdocs.yml` nav if needed; mark Phase 7 as superseded by Phase 12 in `plan.md`.
 - Read: `reports/mbpp-headroom-probe-report.md`, `reports/mbpp-3seed-results.md`,
   `reports/bizsql-headroom-probe-report.md`, `reports/bizsql-3seed-results.md`, run outputs
